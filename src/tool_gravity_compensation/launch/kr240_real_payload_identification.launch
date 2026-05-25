@@ -1,0 +1,45 @@
+<?xml version="1.0"?>
+<launch>
+  <arg name="robot_ip" default="172.31.1.147"/>
+  <arg name="eki_port" default="54600"/>
+  <arg name="sensor_ip" default="192.168.0.108"/>
+  <arg name="publish_rate" default="200"/>
+  <arg name="use_rviz" default="true"/>
+  <arg name="use_primitive_visuals" default="true"/>
+  <arg name="use_collision_mesh_visuals" default="false"/>
+  <arg name="tool0_to_sri_xyz" default="0 0 0"/>
+  <arg name="tool0_to_sri_yaw_pitch_roll" default="0 0 0"/>
+  <arg name="filter_enabled" default="true"/>
+  <arg name="filter_window_size" default="10"/>
+  <arg name="min_stable_samples" default="20"/>
+  <arg name="max_stddev_force" default="2.0"/>
+  <arg name="max_stddev_torque" default="0.2"/>
+  <arg name="sample_timeout" default="1.0"/>
+
+  <include file="$(find kr340_moveit)/launch/kr240_eki_moveit_planning_execution.launch">
+    <arg name="robot_ip" value="$(arg robot_ip)"/>
+    <arg name="port" value="$(arg eki_port)"/>
+    <arg name="use_rviz" value="$(arg use_rviz)"/>
+    <arg name="use_primitive_visuals" value="$(arg use_primitive_visuals)"/>
+    <arg name="use_collision_mesh_visuals" value="$(arg use_collision_mesh_visuals)"/>
+  </include>
+
+  <include file="$(find sriforcesensor)/launch/sri_ft_sensor.launch">
+    <arg name="sensor_ip" value="$(arg sensor_ip)"/>
+    <arg name="publish_rate" value="$(arg publish_rate)"/>
+    <arg name="filter_enabled" value="$(arg filter_enabled)"/>
+    <arg name="filter_window_size" value="$(arg filter_window_size)"/>
+    <arg name="max_stddev_force" value="$(arg max_stddev_force)"/>
+    <arg name="max_stddev_torque" value="$(arg max_stddev_torque)"/>
+  </include>
+
+  <include file="$(find tool_gravity_compensation)/launch/kr240_payload_identification.launch">
+    <arg name="tool0_to_sri_xyz" value="$(arg tool0_to_sri_xyz)"/>
+    <arg name="tool0_to_sri_yaw_pitch_roll" value="$(arg tool0_to_sri_yaw_pitch_roll)"/>
+    <arg name="filter_window_size" value="$(arg filter_window_size)"/>
+    <arg name="min_stable_samples" value="$(arg min_stable_samples)"/>
+    <arg name="max_stddev_force" value="$(arg max_stddev_force)"/>
+    <arg name="max_stddev_torque" value="$(arg max_stddev_torque)"/>
+    <arg name="sample_timeout" value="$(arg sample_timeout)"/>
+  </include>
+</launch>

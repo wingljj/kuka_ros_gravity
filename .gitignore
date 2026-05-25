@@ -1,0 +1,12 @@
+build/
+devel/
+install/
+logs/
+.catkin_tools/
+.ros/
+*.pyc
+__pycache__/
+*.log
+*.bag
+frames.gv
+frames.pdf

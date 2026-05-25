@@ -1,0 +1,6 @@
+bool compute
+uint32 min_samples
+---
+bool success
+tool_gravity_compensation/PayloadResult result
+string message

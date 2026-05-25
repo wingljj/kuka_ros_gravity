@@ -1,0 +1,8 @@
+bool apply
+bool enabled
+int32 window_size
+float64 max_stddev_force
+float64 max_stddev_torque
+---
+bool success
+string message

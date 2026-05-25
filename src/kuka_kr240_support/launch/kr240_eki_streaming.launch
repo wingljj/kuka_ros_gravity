@@ -1,0 +1,15 @@
+<?xml version="1.0"?>
+<launch>
+  <arg name="robot_ip" default="172.31.1.147"/>
+  <arg name="port" default="54600"/>
+
+  <include file="$(find kuka_kr240_support)/launch/load_kr240_r3330.launch"/>
+  <rosparam command="load" file="$(find kuka_kr240_support)/config/joint_names_kr240_r3330.yaml"/>
+
+  <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher"/>
+
+  <include file="$(find kuka_eki_hw_interface)/launch/robot_interface_streaming.launch">
+    <arg name="robot_ip" value="$(arg robot_ip)"/>
+    <arg name="port" value="$(arg port)"/>
+  </include>
+</launch>

@@ -1,0 +1,11 @@
+std_msgs/Header header
+float64 mass_kg
+float64 weight_n
+geometry_msgs/Vector3 com_sensor
+float64 tool_mass
+geometry_msgs/Vector3 center_of_mass
+geometry_msgs/Wrench sensor_zero
+geometry_msgs/Vector3 base_angle
+float64 residual_error
+bool success
+string message

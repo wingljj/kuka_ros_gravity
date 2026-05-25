@@ -1,0 +1,47 @@
+<?xml version="1.0"?>
+<launch>
+  <arg name="sri_frame" default="sri_ft_sensor"/>
+  <arg name="base_frame" default="base_link"/>
+  <arg name="tool0_to_sri_xyz" default="0 0 0"/>
+  <arg name="tool0_to_sri_yaw_pitch_roll" default="0 0 0"/>
+  <arg name="tool0_to_sri_quat_xyzw" default="0 0 0 1"/>
+  <arg name="use_tool0_to_sri_quaternion" default="false"/>
+  <arg name="dynamic_sensor_mount" default="true"/>
+  <arg name="wrench_topic" default="/sri_ft_sensor/wrench"/>
+  <arg name="filter_window_size" default="10"/>
+  <arg name="max_stddev_force" default="2.0"/>
+  <arg name="max_stddev_torque" default="0.2"/>
+  <arg name="min_stable_samples" default="20"/>
+  <arg name="sample_timeout" default="1.0"/>
+  <arg name="move_group" default="manipulator"/>
+
+  <node if="$(arg dynamic_sensor_mount)"
+        name="sensor_mount_tf_manager" pkg="tool_gravity_compensation"
+        type="sensor_mount_tf_manager.py" output="screen">
+    <param name="parent_frame" value="tool0"/>
+    <param name="child_frame" value="$(arg sri_frame)"/>
+    <param name="xyz" value="$(arg tool0_to_sri_xyz)"/>
+    <param name="rpy" value="$(arg tool0_to_sri_yaw_pitch_roll)"/>
+  </node>
+
+  <node unless="$(eval arg('use_tool0_to_sri_quaternion') or arg('dynamic_sensor_mount'))"
+        name="tool0_to_sri_ft_sensor" pkg="tf" type="static_transform_publisher"
+        args="$(arg tool0_to_sri_xyz) $(arg tool0_to_sri_yaw_pitch_roll) tool0 $(arg sri_frame) 100"/>
+
+  <node if="$(eval arg('use_tool0_to_sri_quaternion') and not arg('dynamic_sensor_mount'))"
+        name="tool0_to_sri_ft_sensor" pkg="tf" type="static_transform_publisher"
+        args="$(arg tool0_to_sri_xyz) $(arg tool0_to_sri_quat_xyzw) tool0 $(arg sri_frame) 100"/>
+
+  <node name="collect_load_profile_server" pkg="tool_gravity_compensation"
+        type="collect_load_profile_server" output="screen">
+    <param name="wrench_topic" value="$(arg wrench_topic)"/>
+    <param name="sensor_frame" value="$(arg sri_frame)"/>
+    <param name="base_frame" value="$(arg base_frame)"/>
+    <param name="move_group" value="$(arg move_group)"/>
+    <param name="sampling/filter_window_size" value="$(arg filter_window_size)"/>
+    <param name="sampling/max_stddev_force" value="$(arg max_stddev_force)"/>
+    <param name="sampling/max_stddev_torque" value="$(arg max_stddev_torque)"/>
+    <param name="sampling/min_stable_samples" value="$(arg min_stable_samples)"/>
+    <param name="sampling/sample_timeout" value="$(arg sample_timeout)"/>
+  </node>
+</launch>

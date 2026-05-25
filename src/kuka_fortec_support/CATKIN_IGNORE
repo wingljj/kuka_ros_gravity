@@ -1,0 +1,2 @@
+This package is ROS 2/ament-based. The ROS 1 Noetic workspace uses
+kuka_kr240_support for KR240 R3330 model support.

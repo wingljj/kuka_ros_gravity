@@ -1,0 +1,25 @@
+<?xml version="1.0"?>
+<robot name="kuka_kr240_r3330" xmlns:xacro="http://wiki.ros.org/xacro">
+  <xacro:include filename="$(find kuka_kr240_support)/urdf/kr240_r3330_macro.xacro"/>
+
+  <xacro:arg name="prefix" default=""/>
+  <xacro:arg name="x" default="0"/>
+  <xacro:arg name="y" default="0"/>
+  <xacro:arg name="z" default="0"/>
+  <xacro:arg name="roll" default="0"/>
+  <xacro:arg name="pitch" default="0"/>
+  <xacro:arg name="yaw" default="0"/>
+  <xacro:arg name="use_primitive_visuals" default="true"/>
+  <xacro:arg name="use_collision_mesh_visuals" default="false"/>
+
+  <link name="world"/>
+  <xacro:kuka_kr240_r3330 prefix="$(arg prefix)"
+                          use_primitive_visuals="$(arg use_primitive_visuals)"
+                          use_collision_mesh_visuals="$(arg use_collision_mesh_visuals)"/>
+
+  <joint name="$(arg prefix)world-base_link" type="fixed">
+    <parent link="world"/>
+    <child link="$(arg prefix)base_link"/>
+    <origin xyz="$(arg x) $(arg y) $(arg z)" rpy="$(arg roll) $(arg pitch) $(arg yaw)"/>
+  </joint>
+</robot>

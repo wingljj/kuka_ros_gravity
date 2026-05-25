@@ -1,0 +1,14 @@
+uint8 TOOL_ONLY=1
+uint8 TOOL_PLUS_PAYLOAD=2
+uint8 profile_type
+uint32 requested_samples
+bool execute_motion
+string[] pose_names
+---
+bool success
+tool_gravity_compensation/PayloadResult result
+string message
+---
+uint32 current_step
+uint32 samples_collected
+string state

@@ -1,0 +1,18 @@
+<launch>
+  <node name="collect_load_profile_server" pkg="tool_gravity_compensation"
+        type="collect_load_profile_server" output="screen">
+    <param name="wrench_topic" value="/sri_ft_sensor/wrench"/>
+    <param name="sensor_frame" value="sri_ft_sensor"/>
+    <param name="move_group" value="manipulator"/>
+    <param name="sampling/filter_window_size" value="10"/>
+    <param name="sampling/max_stddev_force" value="2.0"/>
+    <param name="sampling/max_stddev_torque" value="0.2"/>
+    <param name="sampling/min_stable_samples" value="20"/>
+    <param name="sampling/sample_timeout" value="0.2"/>
+  </node>
+
+  <test test-name="test_collect_load_profile_fail_closed"
+        pkg="tool_gravity_compensation"
+        type="test_collect_load_profile_fail_closed.py"
+        time-limit="10.0"/>
+</launch>

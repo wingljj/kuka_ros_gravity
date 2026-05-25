@@ -1,0 +1,11 @@
+moveit_setup_assistant_config:
+  URDF:
+    package: ""
+    relative_path: /tmp/kr240_r3330.urdf
+    xacro_args: ""
+  SRDF:
+    relative_path: config/kuka_kr240_r3330.srdf
+  CONFIG:
+    author_name: ljj
+    author_email: 2312083696@qq.com
+    generated_timestamp: 1779685408

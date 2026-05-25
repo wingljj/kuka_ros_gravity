@@ -1,0 +1,36 @@
+<launch>
+  <arg name="robot_ip" default="172.31.1.147"/>
+  <arg name="port" default="54600"/>
+  <arg name="debug" default="false"/>
+  <arg name="pipeline" default="ompl"/>
+  <arg name="use_rviz" default="true"/>
+  <arg name="use_primitive_visuals" default="true"/>
+  <arg name="use_collision_mesh_visuals" default="false"/>
+
+  <include file="$(find kuka_kr240_support)/launch/load_kr240_r3330.launch">
+    <arg name="use_primitive_visuals" value="$(arg use_primitive_visuals)"/>
+    <arg name="use_collision_mesh_visuals" value="$(arg use_collision_mesh_visuals)"/>
+  </include>
+  <rosparam command="load" file="$(find kuka_kr240_support)/config/joint_names_kr240_r3330.yaml"/>
+
+  <include file="$(find kuka_eki_hw_interface)/launch/robot_interface_streaming.launch">
+    <arg name="robot_ip" value="$(arg robot_ip)"/>
+    <arg name="port" value="$(arg port)"/>
+  </include>
+
+  <include file="$(find kr340_moveit)/launch/move_group.launch">
+    <arg name="allow_trajectory_execution" value="true"/>
+    <arg name="moveit_controller_manager" value="simple"/>
+    <arg name="load_robot_description" value="false"/>
+    <arg name="publish_monitored_planning_scene" value="true"/>
+    <arg name="debug" value="$(arg debug)"/>
+    <arg name="pipeline" value="$(arg pipeline)"/>
+    <arg name="use_primitive_visuals" value="$(arg use_primitive_visuals)"/>
+    <arg name="use_collision_mesh_visuals" value="$(arg use_collision_mesh_visuals)"/>
+  </include>
+
+  <include file="$(find kr340_moveit)/launch/moveit_rviz.launch" if="$(arg use_rviz)">
+    <arg name="rviz_config" value="$(find kr340_moveit)/launch/moveit.rviz"/>
+    <arg name="debug" value="$(arg debug)"/>
+  </include>
+</launch>

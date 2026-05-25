@@ -1,0 +1,10 @@
+bool apply
+bool clear_profiles
+int32 filter_window_size
+int32 min_stable_samples
+float64 max_stddev_force
+float64 max_stddev_torque
+float64 sample_timeout
+---
+bool success
+string message

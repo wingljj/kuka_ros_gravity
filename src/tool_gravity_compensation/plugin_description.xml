@@ -1,0 +1,9 @@
+<library path="lib/libtool_gravity_panel">
+  <class name="tool_gravity_compensation/ToolGravityPanel"
+         type="tool_gravity_compensation::ToolGravityPanel"
+         base_class_type="rviz::Panel">
+    <description>
+      Safe RViz operator panel for KR240 SRI wrench filtering, sensor mount setup, manual sampling, and payload tare computation.
+    </description>
+  </class>
+</library>

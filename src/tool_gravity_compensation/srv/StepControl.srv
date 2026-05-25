@@ -1,0 +1,14 @@
+uint8 TOOL_ONLY=1
+uint8 TOOL_PLUS_PAYLOAD=2
+uint8 profile_type
+uint32 step_index
+bool execute_motion
+bool sample_wrench
+string target_pose_name
+geometry_msgs/PoseStamped target_pose
+---
+bool accepted
+bool motion_done
+bool sample_recorded
+uint32 samples_collected
+string message

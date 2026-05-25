@@ -1,0 +1,6 @@
+<?xml version="1.0"?>
+<launch>
+  <arg name="use_primitive_visuals" default="true"/>
+  <arg name="use_collision_mesh_visuals" default="false"/>
+  <param name="robot_description" command="$(find xacro)/xacro '$(find kuka_kr240_support)/urdf/kr240_r3330.xacro' use_primitive_visuals:=$(arg use_primitive_visuals) use_collision_mesh_visuals:=$(arg use_collision_mesh_visuals)"/>
+</launch>

@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<launch>
+  <arg name="sensor_ip" default="192.168.0.108"/>
+  <arg name="publish_rate" default="200"/>
+  <arg name="frame_id" default="sri_ft_sensor"/>
+  <arg name="raw_wrench_topic" default="/sri_ft_sensor/raw_wrench"/>
+  <arg name="filtered_wrench_topic" default="/sri_ft_sensor/wrench"/>
+  <arg name="filter_enabled" default="true"/>
+  <arg name="filter_window_size" default="10"/>
+  <arg name="max_stddev_force" default="2.0"/>
+  <arg name="max_stddev_torque" default="0.2"/>
+
+  <node name="sri_forcesensor" pkg="sriforcesensor" type="forcesensor"
+        args="$(arg sensor_ip) $(arg publish_rate)" output="screen">
+    <param name="frame_id" value="$(arg frame_id)"/>
+    <param name="raw_wrench_topic" value="$(arg raw_wrench_topic)"/>
+    <param name="filtered_wrench_topic" value="$(arg filtered_wrench_topic)"/>
+    <param name="filter/enabled" value="$(arg filter_enabled)"/>
+    <param name="filter/window_size" value="$(arg filter_window_size)"/>
+    <param name="filter/max_stddev_force" value="$(arg max_stddev_force)"/>
+    <param name="filter/max_stddev_torque" value="$(arg max_stddev_torque)"/>
+  </node>
+</launch>

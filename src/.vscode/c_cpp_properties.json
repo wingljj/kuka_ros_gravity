@@ -1,0 +1,51 @@
+{
+  "configurations": [
+    {
+      "browse": {
+        "databaseFilename": "${default}",
+        "limitSymbolsToIncludedHeaders": false
+      },
+      "includePath": [
+        "/home/star/kuka_ros/devel/include/**",
+        "/home/star/ws_moveit/devel/include/**",
+        "/opt/ros/melodic/include/**",
+        "/home/star/ws_moveit/src/moveit/moveit_planners/chomp/chomp_motion_planner/include/**",
+        "/home/star/kuka_ros/src/descartes/descartes_core/include/**",
+        "/home/star/kuka_ros/src/descartes/descartes_moveit/include/**",
+        "/home/star/kuka_ros/src/descartes/descartes_planner/include/**",
+        "/home/star/kuka_ros/src/descartes/descartes_tests/include/**",
+        "/home/star/kuka_ros/src/descartes/descartes_trajectory/include/**",
+        "/home/star/kuka_ros/src/descartes/descartes_utilities/include/**",
+        "/home/star/ws_moveit/src/geometric_shapes/include/**",
+        "/home/star/kuka_ros/src/kuka_eki_hw_interface/include/**",
+        "/home/star/kuka_ros/src/kuka_rsi_hw_interface/include/**",
+        "/home/star/kuka_ros/src/moveit_cartesian_plan_plugin/include/**",
+        "/home/star/ws_moveit/src/moveit/moveit_planners/chomp/chomp_interface/include/**",
+        "/home/star/ws_moveit/src/moveit_resources/prbt_ikfast_manipulator_plugin/include/**",
+        "/home/star/ws_moveit/src/moveit/moveit_ros/benchmarks/include/**",
+        "/home/star/ws_moveit/src/moveit/moveit_plugins/moveit_ros_control_interface/include/**",
+        "/home/star/ws_moveit/src/moveit/moveit_ros/move_group/include/**",
+        "/home/star/ws_moveit/src/moveit/moveit_ros/occupancy_map_monitor/include/**",
+        "/home/star/ws_moveit/src/moveit/moveit_ros/robot_interaction/include/**",
+        "/home/star/ws_moveit/src/moveit/moveit_ros/moveit_servo/include/**",
+        "/home/star/ws_moveit/src/moveit/moveit_setup_assistant/include/**",
+        "/home/star/ws_moveit/src/moveit/moveit_plugins/moveit_simple_controller_manager/include/**",
+        "/home/star/ws_moveit/src/moveit_visual_tools/include/**",
+        "/home/star/ws_moveit/src/moveit/moveit_planners/pilz_industrial_motion_planner/include/**",
+        "/home/star/ws_moveit/src/moveit/moveit_planners/pilz_industrial_motion_planner_testutils/include/**",
+        "/home/star/ws_moveit/src/rviz_visual_tools/include/**",
+        "/home/star/ws_moveit/src/moveit/moveit_planners/sbpl/core/sbpl_interface/include/**",
+        "/home/star/ws_moveit/src/srdfdom/include/**",
+        "/home/star/kuka_ros/src/test/include/**",
+        "/usr/include/**",
+        "/home/star/kuka_ros/src/admittance/include/**"
+      ],
+      "name": "ROS",
+      "intelliSenseMode": "gcc-x64",
+      "compilerPath": "/usr/bin/gcc",
+      "cStandard": "gnu11",
+      "cppStandard": "c++14"
+    }
+  ],
+  "version": 4
+}

@@ -1,0 +1,16 @@
+# 客户端请求时发送的两个数字
+bool execute
+---
+# 服务器响应发送的数据
+float32 tool_mass_center_x
+float32 tool_mass_center_y
+float32 tool_mass_center_z
+float32 sensor_zero_point_1
+float32 sensor_zero_point_2
+float32 sensor_zero_point_3
+float32 sensor_zero_point_4
+float32 sensor_zero_point_5
+float32 sensor_zero_point_6
+float32 base_angle_1
+float32 base_angle_2
+float32 tool_mass
