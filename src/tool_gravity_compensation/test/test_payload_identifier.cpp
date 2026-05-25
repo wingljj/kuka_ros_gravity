@@ -40,8 +40,8 @@ std::array<double, 3> cross(const std::array<double, 3>& a, const std::array<dou
 
 TEST(PayloadIdentifier, ComputesPayloadMassWeightAndCenterOfMassByTareSubtraction)
 {
-  const LoadInertialProfile tool_only{2.0, {0.10, 0.00, 0.20}};
-  const LoadInertialProfile total{5.0, {0.22, 0.06, 0.32}};
+  const LoadInertialProfile tool_only{2.0, {0.10, 0.00, 0.20}, 0.0};
+  const LoadInertialProfile total{5.0, {0.22, 0.06, 0.32}, 0.0};
 
   const PayloadMassProperties payload = computePayloadFromProfiles(tool_only, total);
 
@@ -54,8 +54,8 @@ TEST(PayloadIdentifier, ComputesPayloadMassWeightAndCenterOfMassByTareSubtractio
 
 TEST(PayloadIdentifier, KeepsPayloadResultDistinctFromToolProfile)
 {
-  const LoadInertialProfile tool_only{1.5, {-0.02, 0.01, 0.12}};
-  const LoadInertialProfile total{4.0, {0.10, 0.05, 0.20}};
+  const LoadInertialProfile tool_only{1.5, {-0.02, 0.01, 0.12}, 0.0};
+  const LoadInertialProfile total{4.0, {0.10, 0.05, 0.20}, 0.0};
 
   const PayloadMassProperties payload = computePayloadFromProfiles(tool_only, total);
 
@@ -65,16 +65,24 @@ TEST(PayloadIdentifier, KeepsPayloadResultDistinctFromToolProfile)
 
 TEST(PayloadIdentifier, RejectsNonPositivePayloadAfterTareSubtraction)
 {
-  const LoadInertialProfile tool_only{4.0, {0.0, 0.0, 0.0}};
-  const LoadInertialProfile total{4.0, {0.1, 0.1, 0.1}};
+  const LoadInertialProfile tool_only{4.0, {0.0, 0.0, 0.0}, 0.0};
+  const LoadInertialProfile total{4.0, {0.1, 0.1, 0.1}, 0.0};
+
+  EXPECT_THROW(computePayloadFromProfiles(tool_only, total), std::invalid_argument);
+}
+
+TEST(PayloadIdentifier, RejectsPayloadMassBelowSafetyThreshold)
+{
+  const LoadInertialProfile tool_only{4.0, {0.0, 0.0, 0.0}, 0.0};
+  const LoadInertialProfile total{4.01, {0.1, 0.1, 0.1}, 0.0};
 
   EXPECT_THROW(computePayloadFromProfiles(tool_only, total), std::invalid_argument);
 }
 
 TEST(PayloadIdentifier, RejectsInvalidGravity)
 {
-  const LoadInertialProfile tool_only{1.0, {0.0, 0.0, 0.0}};
-  const LoadInertialProfile total{2.0, {0.1, 0.1, 0.1}};
+  const LoadInertialProfile tool_only{1.0, {0.0, 0.0, 0.0}, 0.0};
+  const LoadInertialProfile total{2.0, {0.1, 0.1, 0.1}, 0.0};
 
   EXPECT_THROW(computePayloadFromProfiles(tool_only, total, 0.0), std::invalid_argument);
 }
@@ -118,11 +126,37 @@ TEST(PayloadIdentifier, EstimatesLoadProfileFromMultipleStaticWrenchOrientations
   EXPECT_NEAR(profile.com_sensor_m[0], com[0], 1e-9);
   EXPECT_NEAR(profile.com_sensor_m[1], com[1], 1e-9);
   EXPECT_NEAR(profile.com_sensor_m[2], com[2], 1e-9);
+  EXPECT_NEAR(profile.residual_error, 0.0, 1e-9);
 }
 
 TEST(PayloadIdentifier, RejectsUnderconstrainedLoadProfileEstimation)
 {
   std::vector<WrenchObservation> observations(2);
+
+  EXPECT_THROW(estimateLoadProfileFromWrenches(observations), std::invalid_argument);
+}
+
+TEST(PayloadIdentifier, RejectsIllConditionedOrientationSet)
+{
+  const double mass = 3.25;
+  const std::array<double, 3> com{{0.08, -0.03, 0.14}};
+  const std::array<double, 3> gravity_force_base{{0.0, 0.0, -mass * tool_gravity_compensation::kStandardGravity}};
+  const std::array<double, 9> base_R_sensor{{1.0, 0.0, 0.0,
+                                             0.0, 1.0, 0.0,
+                                             0.0, 0.0, 1.0}};
+
+  std::vector<WrenchObservation> observations;
+  for (int i = 0; i < 6; ++i)
+  {
+    const std::array<double, 3> load_force_sensor = transposeMatVec(base_R_sensor, gravity_force_base);
+    const std::array<double, 3> load_torque_sensor = cross(com, load_force_sensor);
+
+    WrenchObservation observation;
+    observation.base_R_sensor = base_R_sensor;
+    observation.force = load_force_sensor;
+    observation.torque = load_torque_sensor;
+    observations.push_back(observation);
+  }
 
   EXPECT_THROW(estimateLoadProfileFromWrenches(observations), std::invalid_argument);
 }

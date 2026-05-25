@@ -9,11 +9,16 @@ namespace tool_gravity_compensation
 {
 
 constexpr double kStandardGravity = 9.80665;
+constexpr double kMinimumPayloadMassKg = 0.05;
+constexpr double kMaximumLeastSquaresConditionNumber = 1000.0;
+constexpr double kMaximumForceResidualN = 5.0;
+constexpr double kMaximumTorqueResidualNm = 0.5;
 
 struct LoadInertialProfile
 {
   double mass_kg;
   std::array<double, 3> com_sensor_m;
+  double residual_error;
 };
 
 struct WrenchObservation
@@ -32,10 +37,14 @@ struct PayloadMassProperties
 
 PayloadMassProperties computePayloadFromProfiles(const LoadInertialProfile& tool_only,
                                                  const LoadInertialProfile& tool_plus_payload,
-                                                 double gravity = kStandardGravity);
+                                                 double gravity = kStandardGravity,
+                                                 double minimum_payload_mass_kg = kMinimumPayloadMassKg);
 
 LoadInertialProfile estimateLoadProfileFromWrenches(const std::vector<WrenchObservation>& observations,
-                                                    double gravity = kStandardGravity);
+                                                    double gravity = kStandardGravity,
+                                                    double maximum_condition_number = kMaximumLeastSquaresConditionNumber,
+                                                    double maximum_force_residual_n = kMaximumForceResidualN,
+                                                    double maximum_torque_residual_nm = kMaximumTorqueResidualNm);
 
 }  // namespace tool_gravity_compensation
 

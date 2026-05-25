@@ -32,6 +32,15 @@ roslaunch tool_gravity_compensation kr240_real_payload_identification.launch \
   robot_ip:=172.31.1.147 eki_port:=54600 sensor_ip:=192.168.0.108 publish_rate:=200
 ```
 
+This real launch defaults to `allow_trajectory_execution:=false` and
+`use_rviz:=false`. Enable real MoveIt execution only after a separate hardware
+safety review:
+
+```bash
+roslaunch tool_gravity_compensation kr240_real_payload_identification.launch \
+  allow_trajectory_execution:=true use_rviz:=true
+```
+
 The SRI driver uses TCP port `4008` and publishes:
 
 - `/sri_ft_sensor/raw_wrench`
@@ -49,6 +58,9 @@ The SRI driver uses TCP port `4008` and publishes:
   `Sample timeout s`: stability gate before a sample is accepted.
 - `Robot IP`, `EKI port`, `SRI IP`, `SRI rate Hz`: stored on the ROS parameter
   server for launch/operator visibility.
+- SRI torque units/signs are configured at launch with `torque_scale` and
+  `sign_correction`. Keep `torque_scale:=1.0` for Nm; use `0.001` if the
+  sensor outputs Nmm.
 
 ## Safety Rules
 
@@ -57,5 +69,19 @@ The SRI driver uses TCP port `4008` and publishes:
   clear.
 - Use low-speed mode for real robot tests.
 - This package refuses automatic motion execution in the sampling server.
+- `/step_control` requires a manual confirmation flag, so command-line callers
+  cannot record samples without explicitly declaring operator confirmation.
 - Use `Clear Profiles` whenever tooling, payload, sensor mount, or filter
   settings change.
+
+## Result Quality Gates
+
+- At least three observations are required; six or more distinct static
+  orientations are recommended.
+- Near-singular orientation sets are rejected by least-squares rank/condition
+  checks.
+- Force and torque residuals are checked during `/compute_payload` before a
+  payload result is reported as successful.
+- Tare-subtracted payload mass must be at least `0.05 kg` by default.
+- `residual_error` reports the largest profile residual used for the final
+  payload result.

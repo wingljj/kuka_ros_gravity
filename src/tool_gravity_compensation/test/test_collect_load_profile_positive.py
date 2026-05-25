@@ -103,6 +103,8 @@ class CollectLoadProfilePositiveTest(unittest.TestCase):
         request.step_index = step_index
         request.execute_motion = False
         request.sample_wrench = True
+        request.manual_confirmed = True
+        request.target_pose_name = "test"
         response = self.step_control(request)
         self.assertTrue(response.accepted, response.message)
         self.assertTrue(response.sample_recorded, response.message)
@@ -164,6 +166,7 @@ class CollectLoadProfilePositiveTest(unittest.TestCase):
         goal.profile_type = CollectLoadProfileGoal.TOOL_ONLY
         goal.requested_samples = 2
         goal.execute_motion = False
+        goal.manual_confirmed = True
         self.collect_client.send_goal(goal)
         self.assertTrue(self.collect_client.wait_for_result(rospy.Duration(5.0)))
 

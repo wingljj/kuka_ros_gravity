@@ -29,6 +29,7 @@ class CollectLoadProfileFailClosedTest(unittest.TestCase):
             step_index=0,
             execute_motion=False,
             sample_wrench=False,
+            manual_confirmed=False,
             target_pose_name="")
         self.assertFalse(rejected.accepted)
         self.assertFalse(rejected.sample_recorded)
@@ -39,6 +40,7 @@ class CollectLoadProfileFailClosedTest(unittest.TestCase):
             step_index=1,
             execute_motion=True,
             sample_wrench=True,
+            manual_confirmed=True,
             target_pose_name="")
         self.assertFalse(motion_rejected.accepted)
         self.assertFalse(motion_rejected.sample_recorded)
@@ -49,10 +51,37 @@ class CollectLoadProfileFailClosedTest(unittest.TestCase):
             step_index=2,
             execute_motion=False,
             sample_wrench=True,
+            manual_confirmed=False,
             target_pose_name="")
         self.assertFalse(no_wrench.accepted)
         self.assertFalse(no_wrench.sample_recorded)
         self.assertEqual(no_wrench.samples_collected, 0)
+        self.assertIn("manual confirmation", no_wrench.message)
+
+        no_wrench_confirmed = self.step_control(
+            profile_type=StepControl._request_class.TOOL_ONLY,
+            step_index=3,
+            execute_motion=False,
+            sample_wrench=True,
+            manual_confirmed=True,
+            target_pose_name="")
+        self.assertFalse(no_wrench_confirmed.accepted)
+        self.assertFalse(no_wrench_confirmed.sample_recorded)
+        self.assertEqual(no_wrench_confirmed.samples_collected, 0)
+        self.assertIn("not enough wrench samples", no_wrench_confirmed.message)
+
+    def test_step_control_requires_manual_confirmation_token(self):
+        rejected = self.step_control(
+            profile_type=StepControl._request_class.TOOL_ONLY,
+            step_index=4,
+            execute_motion=False,
+            sample_wrench=True,
+            manual_confirmed=False,
+            target_pose_name="operator forgot confirmation")
+        self.assertFalse(rejected.accepted)
+        self.assertFalse(rejected.sample_recorded)
+        self.assertEqual(rejected.samples_collected, 0)
+        self.assertIn("manual confirmation", rejected.message)
 
     def test_compute_payload_refuses_until_both_profiles_have_samples(self):
         response = self.compute_payload(compute=True, min_samples=1)
@@ -87,10 +116,24 @@ class CollectLoadProfileFailClosedTest(unittest.TestCase):
         goal.profile_type = CollectLoadProfileGoal.TOOL_ONLY
         goal.requested_samples = 1
         goal.execute_motion = True
+        goal.manual_confirmed = True
         self.client.send_goal(goal)
         self.assertTrue(self.client.wait_for_result(rospy.Duration(5.0)))
         self.assertEqual(self.client.get_state(), actionlib.GoalStatus.ABORTED)
         self.assertFalse(self.client.get_result().success)
+
+    def test_collect_action_requires_manual_confirmation(self):
+        goal = CollectLoadProfileGoal()
+        goal.profile_type = CollectLoadProfileGoal.TOOL_ONLY
+        goal.requested_samples = 1
+        goal.execute_motion = False
+        goal.manual_confirmed = False
+        self.client.send_goal(goal)
+        self.assertTrue(self.client.wait_for_result(rospy.Duration(5.0)))
+        self.assertEqual(self.client.get_state(), actionlib.GoalStatus.ABORTED)
+        result = self.client.get_result()
+        self.assertFalse(result.success)
+        self.assertIn("manual confirmation", result.message)
 
 
 if __name__ == "__main__":

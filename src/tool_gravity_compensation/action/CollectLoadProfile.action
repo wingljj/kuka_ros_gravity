@@ -3,6 +3,7 @@ uint8 TOOL_PLUS_PAYLOAD=2
 uint8 profile_type
 uint32 requested_samples
 bool execute_motion
+bool manual_confirmed
 string[] pose_names
 ---
 bool success

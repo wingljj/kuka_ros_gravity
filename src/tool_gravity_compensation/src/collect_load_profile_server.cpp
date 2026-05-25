@@ -71,6 +71,7 @@ bool validProfileType(uint8_t profile_type)
   return profile_type == StepControl::Request::TOOL_ONLY ||
          profile_type == StepControl::Request::TOOL_PLUS_PAYLOAD;
 }
+
 }  // namespace
 
 class CollectLoadProfileServer
@@ -131,6 +132,15 @@ private:
       server_.setAborted(result, result.message);
       return;
     }
+    if (!goal->manual_confirmed)
+    {
+      result.success = false;
+      result.result.success = false;
+      result.message = "CollectLoadProfile refused: missing manual confirmation";
+      result.result.message = result.message;
+      server_.setAborted(result, result.message);
+      return;
+    }
 
     const uint32_t requested_samples = goal->requested_samples == 0 ? 1 : goal->requested_samples;
     for (uint32_t index = 0; index < requested_samples; ++index)
@@ -150,6 +160,7 @@ private:
       request.profile_type = goal->profile_type;
       request.execute_motion = false;
       request.sample_wrench = true;
+      request.manual_confirmed = goal->manual_confirmed;
       request.step_index = index;
       if (index < goal->pose_names.size())
       {
@@ -220,6 +231,11 @@ private:
       response.message = "StepControl refused: invalid profile_type";
       return true;
     }
+    if (!request.manual_confirmed)
+    {
+      response.message = "StepControl refused: missing manual confirmation";
+      return true;
+    }
 
     WrenchObservation observation;
     std::string error;
@@ -285,7 +301,7 @@ private:
       response.result.com_sensor.z = payload.com_sensor_m[2];
       response.result.tool_mass = tool_profile.mass_kg;
       response.result.center_of_mass = response.result.com_sensor;
-      response.result.residual_error = 0.0;
+      response.result.residual_error = std::max(tool_profile.residual_error, total_profile.residual_error);
       response.result.message = "Payload mass properties computed in sri_ft_sensor frame";
       response.message = response.result.message;
     }

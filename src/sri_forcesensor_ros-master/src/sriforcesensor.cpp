@@ -10,11 +10,12 @@
 #include "sriforcesensor/wrench_filter.h"
 #include <Eigen/Dense>
 #include <exception>
+#include <array>
 #include <string>
 using namespace Eigen;
 using namespace std;
 TCPClient tcp;
-#define M812X_CHN_NUMBER	6
+#define M812X_CHN_NUMBER  6
 MatrixXd m_dResultChValue=MatrixXd::Zero(1,M812X_CHN_NUMBER); //engineering output of each channel
 
 void sig_exit(int s)
@@ -41,10 +42,10 @@ bool ConfigSystem(void)
     std::cout << "Server Not Response: Exit Now!"  << endl;
     return false;
   }
-  if (rec.find(";E;") == std::string::npos)
+  if (rec.find("(A01,A02,A03,A04,A05,A06);E;") == std::string::npos)
   {
-    ROS_ERROR("SRI sensor is not reporting Engineering Output (';E;'). Refusing to publish wrench data.");
-    ROS_ERROR("Set the sensor output to '(A01,A02,A03,A04,A05,A06);E;1;(WMA:1)' before running payload identification.");
+    ROS_ERROR("SRI sensor output format is not the expected '(A01,A02,A03,A04,A05,A06);E;'. Refusing to publish wrench data.");
+    ROS_ERROR("Configure the sensor to '(A01,A02,A03,A04,A05,A06);E;1;(WMA:1)' before running payload identification.");
     return false;
   }
   // ### If you want to solve the abot problem, uncomment the following lines to set once ### 
@@ -164,6 +165,8 @@ int main(int argc, char **argv)
   int filter_window_size;
   double max_stddev_force;
   double max_stddev_torque;
+  double torque_scale;
+  std::string sign_correction_string;
   private_nh.param<std::string>("frame_id", frame_id, "sri_ft_sensor");
   private_nh.param<std::string>("raw_wrench_topic", raw_wrench_topic, "/sri_ft_sensor/raw_wrench");
   private_nh.param<std::string>("filtered_wrench_topic", filtered_wrench_topic, "/sri_ft_sensor/wrench");
@@ -171,6 +174,8 @@ int main(int argc, char **argv)
   private_nh.param<int>("filter/window_size", filter_window_size, 10);
   private_nh.param<double>("filter/max_stddev_force", max_stddev_force, 2.0);
   private_nh.param<double>("filter/max_stddev_torque", max_stddev_torque, 0.2);
+  private_nh.param<double>("torque_scale", torque_scale, 1.0);
+  private_nh.param<std::string>("sign_correction", sign_correction_string, "1 1 1 1 1 1");
   sriforcesensor::WrenchFilterConfig filter_config;
   try
   {
@@ -192,6 +197,30 @@ int main(int argc, char **argv)
   max_stddev_torque = filter_config.max_stddev_torque;
 
   sriforcesensor::MovingAverageWrenchFilter filter(filter_config.window_size);
+  std::array<double, 6> sign_correction{{1.0, 1.0, 1.0, 1.0, 1.0, 1.0}};
+  {
+    std::istringstream stream(sign_correction_string);
+    for (std::size_t i = 0; i < sign_correction.size(); ++i)
+    {
+      if (!(stream >> sign_correction[i]) || (sign_correction[i] != 1.0 && sign_correction[i] != -1.0))
+      {
+        ROS_ERROR("Invalid sign_correction parameter. Use six values, each 1 or -1.");
+        return -1;
+      }
+    }
+    double trailing = 0.0;
+    if (stream >> trailing)
+    {
+      ROS_ERROR("Invalid sign_correction parameter. Use exactly six values, each 1 or -1.");
+      return -1;
+    }
+  }
+  if (torque_scale <= 0.0)
+  {
+    ROS_ERROR("Invalid torque_scale parameter. Use 1.0 for Nm or 0.001 for Nmm engineering output.");
+    return -1;
+  }
+
   ros::Publisher chatter_pub = n.advertise<geometry_msgs::Twist>("sri_force", 1000);
   ros::Publisher raw_wrench_pub = n.advertise<geometry_msgs::WrenchStamped>(raw_wrench_topic, 1000);
   ros::Publisher filtered_wrench_pub = n.advertise<geometry_msgs::WrenchStamped>(filtered_wrench_topic, 1000);
@@ -205,12 +234,30 @@ int main(int argc, char **argv)
            raw_wrench_topic.c_str(), filtered_wrench_topic.c_str(), frame_id.c_str());
   ROS_INFO("ROS-side filter: enabled=%s window=%d max_stddev_force=%f max_stddev_torque=%f",
            filter_enabled ? "true" : "false", filter_window_size, max_stddev_force, max_stddev_torque);
+  ROS_INFO("SRI channel mapping A01..A06 -> Fx,Fy,Fz,Tx,Ty,Tz; torque_scale=%f sign_correction=[%f %f %f %f %f %f]",
+           torque_scale,
+           sign_correction[0], sign_correction[1], sign_correction[2],
+           sign_correction[3], sign_correction[4], sign_correction[5]);
 
   ros::Rate loop_rate(l_rate);
   while (ros::ok())
   {
     // geometry_msgs::Twist 
-    tcp.readrecieveBuffer_IEEEfloat32(m_dResultChValue);
+    if (!tcp.readrecieveBuffer_IEEEfloat32(m_dResultChValue))
+    {
+      ROS_WARN_THROTTLE(1.0, "Skipping SRI publish because no complete valid engineering frame was received.");
+      ros::spinOnce();
+      loop_rate.sleep();
+      continue;
+    }
+
+    for (int i = 0; i < M812X_CHN_NUMBER; ++i)
+    {
+      m_dResultChValue(0, i) *= sign_correction[static_cast<std::size_t>(i)];
+    }
+    m_dResultChValue(0, 3) *= torque_scale;
+    m_dResultChValue(0, 4) *= torque_scale;
+    m_dResultChValue(0, 5) *= torque_scale;
 
     Forcevalue.linear.x=m_dResultChValue(0,0);
     Forcevalue.linear.y=m_dResultChValue(0,1);

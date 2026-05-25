@@ -4,6 +4,7 @@ uint8 profile_type
 uint32 step_index
 bool execute_motion
 bool sample_wrench
+bool manual_confirmed
 string target_pose_name
 geometry_msgs/PoseStamped target_pose
 ---

@@ -2,13 +2,17 @@
 
 #include <Eigen/Dense>
 #include <cmath>
+#include <limits>
+#include <sstream>
+#include <string>
 
 namespace tool_gravity_compensation
 {
 
 PayloadMassProperties computePayloadFromProfiles(const LoadInertialProfile& tool_only,
                                                  const LoadInertialProfile& tool_plus_payload,
-                                                 double gravity)
+                                                 double gravity,
+                                                 double minimum_payload_mass_kg)
 {
   if (tool_only.mass_kg < 0.0 || tool_plus_payload.mass_kg < 0.0)
   {
@@ -18,11 +22,18 @@ PayloadMassProperties computePayloadFromProfiles(const LoadInertialProfile& tool
   {
     throw std::invalid_argument("gravity must be positive");
   }
+  if (minimum_payload_mass_kg <= 0.0)
+  {
+    throw std::invalid_argument("minimum_payload_mass_kg must be positive");
+  }
 
   const double payload_mass = tool_plus_payload.mass_kg - tool_only.mass_kg;
-  if (payload_mass <= 0.0)
+  if (payload_mass < minimum_payload_mass_kg)
   {
-    throw std::invalid_argument("payload mass must be positive after tare subtraction");
+    std::ostringstream stream;
+    stream << "payload mass after tare subtraction is below reliable threshold: "
+           << payload_mass << " kg < " << minimum_payload_mass_kg << " kg";
+    throw std::invalid_argument(stream.str());
   }
 
   PayloadMassProperties result;
@@ -37,8 +48,71 @@ PayloadMassProperties computePayloadFromProfiles(const LoadInertialProfile& tool
   return result;
 }
 
+double conditionNumber(const Eigen::MatrixXd& matrix)
+{
+  const Eigen::JacobiSVD<Eigen::MatrixXd> svd(matrix);
+  const Eigen::VectorXd singular_values = svd.singularValues();
+  if (singular_values.size() == 0)
+  {
+    return std::numeric_limits<double>::infinity();
+  }
+
+  const double largest = singular_values(0);
+  const double smallest = singular_values(singular_values.size() - 1);
+  if (smallest <= 0.0)
+  {
+    return std::numeric_limits<double>::infinity();
+  }
+  return largest / smallest;
+}
+
+void validateLeastSquaresQuality(const char* label,
+                                 const Eigen::MatrixXd& a,
+                                 const Eigen::VectorXd& b,
+                                 const Eigen::VectorXd& x,
+                                 int expected_rank,
+                                 double maximum_condition_number,
+                                 double maximum_residual)
+{
+  const Eigen::JacobiSVD<Eigen::MatrixXd> svd(a);
+  if (svd.rank() < expected_rank)
+  {
+    throw std::invalid_argument(std::string(label) + " observations are underconstrained");
+  }
+
+  const Eigen::VectorXd singular_values = svd.singularValues();
+  const double smallest = singular_values(singular_values.size() - 1);
+  const double kRankTolerance = 1e-9;
+  if (smallest <= kRankTolerance)
+  {
+    throw std::invalid_argument(std::string(label) + " observations are ill-conditioned");
+  }
+
+  const double condition = conditionNumber(a);
+  if (condition > maximum_condition_number)
+  {
+    std::ostringstream stream;
+    stream << label << " observations are ill-conditioned: condition_number="
+           << condition << " > " << maximum_condition_number;
+    throw std::invalid_argument(stream.str());
+  }
+
+  const Eigen::VectorXd residual = a * x - b;
+  const double residual_rms = std::sqrt(residual.squaredNorm() / static_cast<double>(residual.size()));
+  if (residual_rms > maximum_residual)
+  {
+    std::ostringstream stream;
+    stream << label << " residual is too high: rms=" << residual_rms
+           << " > " << maximum_residual;
+    throw std::invalid_argument(stream.str());
+  }
+}
+
 LoadInertialProfile estimateLoadProfileFromWrenches(const std::vector<WrenchObservation>& observations,
-                                                    double gravity)
+                                                    double gravity,
+                                                    double maximum_condition_number,
+                                                    double maximum_force_residual_n,
+                                                    double maximum_torque_residual_nm)
 {
   if (observations.size() < 3)
   {
@@ -47,6 +121,14 @@ LoadInertialProfile estimateLoadProfileFromWrenches(const std::vector<WrenchObse
   if (gravity <= 0.0)
   {
     throw std::invalid_argument("gravity must be positive");
+  }
+  if (maximum_condition_number <= 1.0)
+  {
+    throw std::invalid_argument("maximum_condition_number must be greater than one");
+  }
+  if (maximum_force_residual_n <= 0.0 || maximum_torque_residual_nm <= 0.0)
+  {
+    throw std::invalid_argument("residual thresholds must be positive");
   }
 
   Eigen::MatrixXd force_a(static_cast<Eigen::Index>(observations.size() * 3), 4);
@@ -70,12 +152,15 @@ LoadInertialProfile estimateLoadProfileFromWrenches(const std::vector<WrenchObse
     }
   }
 
-  const Eigen::ColPivHouseholderQR<Eigen::MatrixXd> force_qr(force_a);
-  if (force_qr.rank() < 4)
-  {
-    throw std::invalid_argument("force observations are underconstrained");
-  }
-  const Eigen::VectorXd force_solution = force_qr.solve(force_b);
+  const Eigen::VectorXd force_solution =
+      force_a.bdcSvd(Eigen::ComputeThinU | Eigen::ComputeThinV).solve(force_b);
+  validateLeastSquaresQuality("force",
+                              force_a,
+                              force_b,
+                              force_solution,
+                              4,
+                              maximum_condition_number,
+                              maximum_force_residual_n);
   const double mass = force_solution(0);
   if (mass <= 0.0)
   {
@@ -108,16 +193,25 @@ LoadInertialProfile estimateLoadProfileFromWrenches(const std::vector<WrenchObse
     }
   }
 
-  const Eigen::ColPivHouseholderQR<Eigen::MatrixXd> torque_qr(torque_a);
-  if (torque_qr.rank() < 6)
-  {
-    throw std::invalid_argument("torque observations are underconstrained");
-  }
-  const Eigen::VectorXd torque_solution = torque_qr.solve(torque_b);
+  const Eigen::VectorXd torque_solution =
+      torque_a.bdcSvd(Eigen::ComputeThinU | Eigen::ComputeThinV).solve(torque_b);
+  validateLeastSquaresQuality("torque",
+                              torque_a,
+                              torque_b,
+                              torque_solution,
+                              6,
+                              maximum_condition_number,
+                              maximum_torque_residual_nm);
+
+  const Eigen::VectorXd force_residual = force_a * force_solution - force_b;
+  const Eigen::VectorXd torque_residual = torque_a * torque_solution - torque_b;
 
   LoadInertialProfile profile;
   profile.mass_kg = mass;
   profile.com_sensor_m = {{torque_solution(0), torque_solution(1), torque_solution(2)}};
+  profile.residual_error =
+      std::sqrt((force_residual.squaredNorm() + torque_residual.squaredNorm()) /
+                static_cast<double>(force_residual.size() + torque_residual.size()));
   return profile;
 }
 

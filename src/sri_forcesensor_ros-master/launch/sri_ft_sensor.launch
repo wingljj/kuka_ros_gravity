@@ -9,6 +9,8 @@
   <arg name="filter_window_size" default="10"/>
   <arg name="max_stddev_force" default="2.0"/>
   <arg name="max_stddev_torque" default="0.2"/>
+  <arg name="torque_scale" default="1.0"/>
+  <arg name="sign_correction" default="1 1 1 1 1 1"/>
 
   <node name="sri_forcesensor" pkg="sriforcesensor" type="forcesensor"
         args="$(arg sensor_ip) $(arg publish_rate)" output="screen">
@@ -19,5 +21,7 @@
     <param name="filter/window_size" value="$(arg filter_window_size)"/>
     <param name="filter/max_stddev_force" value="$(arg max_stddev_force)"/>
     <param name="filter/max_stddev_torque" value="$(arg max_stddev_torque)"/>
+    <param name="torque_scale" value="$(arg torque_scale)"/>
+    <param name="sign_correction" value="$(arg sign_correction)"/>
   </node>
 </launch>

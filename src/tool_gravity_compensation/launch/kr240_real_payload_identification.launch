@@ -4,7 +4,8 @@
   <arg name="eki_port" default="54600"/>
   <arg name="sensor_ip" default="192.168.0.108"/>
   <arg name="publish_rate" default="200"/>
-  <arg name="use_rviz" default="true"/>
+  <arg name="use_rviz" default="false"/>
+  <arg name="allow_trajectory_execution" default="false"/>
   <arg name="use_primitive_visuals" default="true"/>
   <arg name="use_collision_mesh_visuals" default="false"/>
   <arg name="tool0_to_sri_xyz" default="0 0 0"/>
@@ -15,11 +16,14 @@
   <arg name="max_stddev_force" default="2.0"/>
   <arg name="max_stddev_torque" default="0.2"/>
   <arg name="sample_timeout" default="1.0"/>
+  <arg name="torque_scale" default="1.0"/>
+  <arg name="sign_correction" default="1 1 1 1 1 1"/>
 
   <include file="$(find kr340_moveit)/launch/kr240_eki_moveit_planning_execution.launch">
     <arg name="robot_ip" value="$(arg robot_ip)"/>
     <arg name="port" value="$(arg eki_port)"/>
     <arg name="use_rviz" value="$(arg use_rviz)"/>
+    <arg name="allow_trajectory_execution" value="$(arg allow_trajectory_execution)"/>
     <arg name="use_primitive_visuals" value="$(arg use_primitive_visuals)"/>
     <arg name="use_collision_mesh_visuals" value="$(arg use_collision_mesh_visuals)"/>
   </include>
@@ -31,6 +35,8 @@
     <arg name="filter_window_size" value="$(arg filter_window_size)"/>
     <arg name="max_stddev_force" value="$(arg max_stddev_force)"/>
     <arg name="max_stddev_torque" value="$(arg max_stddev_torque)"/>
+    <arg name="torque_scale" value="$(arg torque_scale)"/>
+    <arg name="sign_correction" value="$(arg sign_correction)"/>
   </include>
 
   <include file="$(find tool_gravity_compensation)/launch/kr240_payload_identification.launch">

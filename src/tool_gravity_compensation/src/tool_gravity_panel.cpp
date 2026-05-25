@@ -437,6 +437,7 @@ private:
     srv.request.step_index = next_step_index_++;
     srv.request.execute_motion = false;
     srv.request.sample_wrench = true;
+    srv.request.manual_confirmed = true;
     srv.request.target_pose_name = label;
 
     if (!step_client_.waitForExistence(ros::Duration(0.2)) || !step_client_.call(srv))

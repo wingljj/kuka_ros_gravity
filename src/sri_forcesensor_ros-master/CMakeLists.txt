@@ -179,6 +179,11 @@ if(CATKIN_ENABLE_TESTING)
   if(TARGET test_wrench_filter)
     target_link_libraries(test_wrench_filter sri_wrench_filter ${catkin_LIBRARIES} gtest_main)
   endif()
+  catkin_add_gtest(test_sri_frame_parser test/test_sri_frame_parser.cpp)
+  if(TARGET test_sri_frame_parser)
+    target_include_directories(test_sri_frame_parser PRIVATE src)
+    target_link_libraries(test_sri_frame_parser TCPClient2 ${catkin_LIBRARIES} gtest_main)
+  endif()
 endif()
 install(TARGETS TCPClient2 sri_wrench_filter forcesensor
   ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}

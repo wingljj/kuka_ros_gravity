@@ -1,6 +1,10 @@
 #include "TCPClient.h"
 #include "stdio.h"
 
+#include <algorithm>
+#include <array>
+#include <cstring>
+
 union FloatConverter {
     float f;
     uint32_t i;
@@ -12,6 +16,55 @@ TCPClient::TCPClient()
 	sock = -1;
 	port = 0;
 	address = "";
+}
+
+bool TCPClient::extractLatestEngineeringFrame(std::vector<unsigned char>& stream,
+                                              std::array<double, 6>& values)
+{
+    const std::array<unsigned char, 4> header{{0xAA, 0x55, 0x00, 0x1B}};
+    const std::size_t frame_size = 31;
+    std::size_t latest_start = std::string::npos;
+
+    if (stream.size() < header.size())
+    {
+        return false;
+    }
+
+    for (std::size_t i = 0; i + header.size() <= stream.size(); ++i)
+    {
+        if (std::equal(header.begin(), header.end(), stream.begin() + static_cast<std::ptrdiff_t>(i)))
+        {
+            if (i + frame_size <= stream.size())
+            {
+                latest_start = i;
+            }
+        }
+    }
+
+    if (latest_start == std::string::npos)
+    {
+        const auto first_header_byte = std::find(stream.begin(), stream.end(), header[0]);
+        if (first_header_byte == stream.end())
+        {
+            stream.clear();
+        }
+        else if (first_header_byte != stream.begin())
+        {
+            stream.erase(stream.begin(), first_header_byte);
+        }
+        return false;
+    }
+
+    for (std::size_t channel = 0; channel < values.size(); ++channel)
+    {
+        float parsed_value = 0.0f;
+        const std::size_t offset = latest_start + 6 + channel * sizeof(float);
+        std::memcpy(&parsed_value, &stream[offset], sizeof(float));
+        values[channel] = static_cast<double>(parsed_value);
+    }
+
+    stream.erase(stream.begin(), stream.begin() + static_cast<std::ptrdiff_t>(latest_start + frame_size));
+    return true;
 }
 
 bool TCPClient::setup(string address , int port)
@@ -155,57 +208,37 @@ bool TCPClient::readrecieveBuffer(MatrixXd &pdBuffer)
 
 bool TCPClient::readrecieveBuffer_IEEEfloat32(MatrixXd &pdBuffer)
 {
-    int PointCounter=-1;
-    int dataNo=-1;
-
     unsigned char buffer[4096];
     memset(&buffer[0], 0, sizeof(buffer));
-    PointCounter=recv(sock,buffer, 4096, 0);
-    if(PointCounter< 0)
+    const int received_count = recv(sock, buffer, 4096, 0);
+    if(received_count < 0)
     {
         cout << "receive failed!" << endl;
         return false;
     }
-    if(PointCounter<4096)
+    if(received_count == 0)
     {
-        if((buffer[PointCounter-31]==0xAA)&& (buffer[PointCounter-30]==0x55)&& 
-            (buffer[PointCounter-29]==0x00)&& (buffer[PointCounter-28]==0x1B))
-        {
-            FloatConverter converter;
-            int Index=0;
-            for(unsigned int i = 0; i < 6; i++)
-            {
-                converter.bytes[3] = buffer[PointCounter- 22 + Index];
-                converter.bytes[2] = buffer[PointCounter- 23 + Index];
-                converter.bytes[1] = buffer[PointCounter- 24 + Index];
-                converter.bytes[0] = buffer[PointCounter- 25 + Index];
-                pdBuffer(0,i)=converter.f;
-                Index=Index+4;
-            }
-        }
+        cout << "sensor connection closed!" << endl;
+        return false;
     }
-    //////deal with data jam
-//    if(PointCounter>=4096)
-//    {
-//        while(PointCounter==4096)
-//        {
-//            PointCounter=recv(sock, buffer , 4096, 0);
-//            cout<<"processing"<<endl;
-//        }
-//    }
 
-    // cout << "PointCounter!"<<PointCounter << endl;
-    // Here I just read the latested data for processing
-    // if possible, I will add average filtering on the window
-    // maybe it would be safe....let's see
-    //for(int i=PointCounter-19;i<4096;i++)
-   // {
+    receive_buffer_.insert(receive_buffer_.end(), buffer, buffer + received_count);
+    if (receive_buffer_.size() > 4096 * 4)
+    {
+        receive_buffer_.erase(receive_buffer_.begin(),
+                              receive_buffer_.end() - static_cast<std::ptrdiff_t>(4096));
+    }
 
-    //}
-//    if(dataNo==-1)
-//    {
-//        cout<<"Error; data loss"<<endl;
-//    }
+    std::array<double, 6> values{{0.0, 0.0, 0.0, 0.0, 0.0, 0.0}};
+    if (!extractLatestEngineeringFrame(receive_buffer_, values))
+    {
+        return false;
+    }
+
+    for (unsigned int i = 0; i < values.size(); i++)
+    {
+        pdBuffer(0, i) = values[i];
+    }
     return true;
 }
 
