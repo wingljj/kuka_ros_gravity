@@ -65,6 +65,9 @@ public:
     auto* main_layout = new QVBoxLayout;
     main_layout->setSpacing(4);
 
+    // ── Header: logo + title ──
+    main_layout->addWidget(createHeader());
+
     // ── Two-column settings area ──
     auto* columns = new QHBoxLayout;
     auto* left_col = new QVBoxLayout;
@@ -128,7 +131,7 @@ public:
     connect(refresh_timer_, SIGNAL(timeout()), this, SLOT(onRefreshStatusClicked()));
     refresh_timer_->start(1000);
 
-    logOperation("面板已初始化，等待操作...");
+    logOperation("上海卫星装备研究所 · 机械臂负载测试系统 v2.0 已就绪");
   }
 
 private Q_SLOTS:
@@ -390,6 +393,85 @@ private:
   // ═══════════════════════════════════════════════════════════════
   //  Group creators
   // ═══════════════════════════════════════════════════════════════
+
+  QWidget* createHeader()
+  {
+    auto* header = new QWidget;
+    header->setStyleSheet(
+      "QWidget#header {"
+      "  background: qlineargradient(x1:0, y1:0, x2:1, y2:0,"
+      "    stop:0 #0a1f44, stop:0.5 #1a3a6e, stop:1 #0a1f44);"
+      "  border-radius: 6px;"
+      "  padding: 6px;"
+      "}"
+    );
+    header->setObjectName("header");
+    auto* h_layout = new QHBoxLayout;
+    h_layout->setContentsMargins(8, 4, 8, 4);
+
+    // ── Logo: CASC-inspired emblem ──
+    auto* logo_container = new QWidget;
+    logo_container->setFixedSize(72, 52);
+    logo_container->setStyleSheet(
+      "QWidget#logo {"
+      "  background: #0d2b5e;"
+      "  border: 2px solid #3a7bd5;"
+      "  border-radius: 8px;"
+      "}"
+    );
+    logo_container->setObjectName("logo");
+    auto* logo_layout = new QVBoxLayout;
+    logo_layout->setContentsMargins(4, 2, 4, 2);
+    logo_layout->setSpacing(0);
+
+    auto* star = new QLabel("🚀");
+    star->setAlignment(Qt::AlignCenter);
+    star->setStyleSheet("QLabel { font-size: 18px; border: none; background: transparent; }");
+
+    auto* logo_text = new QLabel("中国航天");
+    logo_text->setAlignment(Qt::AlignCenter);
+    logo_text->setStyleSheet(
+      "QLabel { font-size: 9px; font-weight: bold; color: #d4e4ff;"
+      "  border: none; background: transparent; }"
+    );
+
+    logo_layout->addWidget(star);
+    logo_layout->addWidget(logo_text);
+    logo_container->setLayout(logo_layout);
+
+    // ── Title ──
+    auto* title_layout = new QVBoxLayout;
+    title_layout->setSpacing(0);
+
+    auto* title = new QLabel("上海卫星装备研究所");
+    title->setStyleSheet(
+      "QLabel { font-size: 13px; font-weight: bold; color: #d4e4ff;"
+      "  border: none; background: transparent; }"
+    );
+
+    auto* subtitle = new QLabel("机械臂负载测试系统");
+    subtitle->setStyleSheet(
+      "QLabel { font-size: 11px; color: #8ab4f8;"
+      "  border: none; background: transparent; }"
+    );
+
+    title_layout->addWidget(title);
+    title_layout->addWidget(subtitle);
+
+    // ── Version badge ──
+    auto* version = new QLabel("v2.0");
+    version->setAlignment(Qt::AlignRight | Qt::AlignTop);
+    version->setStyleSheet(
+      "QLabel { font-size: 8px; color: #5a8fd0;"
+      "  border: none; background: transparent; padding: 2px; }"
+    );
+
+    h_layout->addWidget(logo_container);
+    h_layout->addLayout(title_layout, 1);
+    h_layout->addWidget(version);
+    header->setLayout(h_layout);
+    return header;
+  }
 
   QGroupBox* createConnectionGroup()
   {
