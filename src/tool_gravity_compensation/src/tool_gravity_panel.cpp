@@ -26,6 +26,7 @@
 #include <QTimer>
 #include <QVBoxLayout>
 
+#include <cmath>
 #include <iomanip>
 #include <sstream>
 
@@ -73,6 +74,7 @@ public:
 
     left_col->addWidget(createConnectionGroup());
     left_col->addWidget(createMountGroup());
+    left_col->addWidget(createToolPositionGroup());
     left_col->addStretch();
 
     right_col->addWidget(createSamplingGroup());
@@ -368,6 +370,8 @@ private Q_SLOTS:
            << " | sri filter " << (sri_filter_ok ? "正常" : "缺失")
            << " | TF " << (tf_ok ? "正常" : "缺失");
     connection_status_label_->setText(QString::fromStdString(stream.str()));
+    // Also update tool position readout
+    updateToolPosition();
     // Only log on manual refresh (not timer-driven) to avoid spam
     // Timer-driven refresh is silent; manual clicks are logged via the button slot
   }
@@ -515,6 +519,82 @@ private:
     return group;
   }
 
+  QGroupBox* createToolPositionGroup()
+  {
+    auto* group = new QGroupBox("工具位置 (tool0 / base_link)");
+    auto* form = new QFormLayout;
+    form->setHorizontalSpacing(6);
+
+    tool_pos_x_label_ = new QLabel("---");
+    tool_pos_y_label_ = new QLabel("---");
+    tool_pos_z_label_ = new QLabel("---");
+    tool_pos_roll_label_ = new QLabel("---");
+    tool_pos_pitch_label_ = new QLabel("---");
+    tool_pos_yaw_label_ = new QLabel("---");
+    tool_pos_status_label_ = new QLabel("等待 TF...");
+    tool_pos_status_label_->setWordWrap(true);
+
+    QFont mono_font("monospace");
+    mono_font.setStyleHint(QFont::Monospace);
+    tool_pos_x_label_->setFont(mono_font);
+    tool_pos_y_label_->setFont(mono_font);
+    tool_pos_z_label_->setFont(mono_font);
+    tool_pos_roll_label_->setFont(mono_font);
+    tool_pos_pitch_label_->setFont(mono_font);
+    tool_pos_yaw_label_->setFont(mono_font);
+
+    form->addRow("X 米", tool_pos_x_label_);
+    form->addRow("Y 米", tool_pos_y_label_);
+    form->addRow("Z 米", tool_pos_z_label_);
+    form->addRow("滚转 °", tool_pos_roll_label_);
+    form->addRow("俯仰 °", tool_pos_pitch_label_);
+    form->addRow("偏航 °", tool_pos_yaw_label_);
+    form->addRow(tool_pos_status_label_);
+    group->setLayout(form);
+    return group;
+  }
+
+  void updateToolPosition()
+  {
+    try
+    {
+      tf::StampedTransform transform;
+      tf_listener_.lookupTransform("base_link", "tool0", ros::Time(0), transform);
+      const double x = transform.getOrigin().x();
+      const double y = transform.getOrigin().y();
+      const double z = transform.getOrigin().z();
+      double roll, pitch, yaw;
+      transform.getBasis().getRPY(roll, pitch, yaw);
+
+      last_tool_x_ = x;
+      last_tool_y_ = y;
+      last_tool_z_ = z;
+      last_tool_roll_ = roll;
+      last_tool_pitch_ = pitch;
+      last_tool_yaw_ = yaw;
+
+      tool_pos_x_label_->setText(QString::number(x, 'f', 4));
+      tool_pos_y_label_->setText(QString::number(y, 'f', 4));
+      tool_pos_z_label_->setText(QString::number(z, 'f', 4));
+      tool_pos_roll_label_->setText(QString::number(roll * 180.0 / M_PI, 'f', 2));
+      tool_pos_pitch_label_->setText(QString::number(pitch * 180.0 / M_PI, 'f', 2));
+      tool_pos_yaw_label_->setText(QString::number(yaw * 180.0 / M_PI, 'f', 2));
+      tool_pos_status_label_->setText("✓ TF 已跟踪");
+      tool_pos_status_label_->setStyleSheet("QLabel { color: green; }");
+    }
+    catch (const tf::TransformException& ex)
+    {
+      tool_pos_x_label_->setText("---");
+      tool_pos_y_label_->setText("---");
+      tool_pos_z_label_->setText("---");
+      tool_pos_roll_label_->setText("---");
+      tool_pos_pitch_label_->setText("---");
+      tool_pos_yaw_label_->setText("---");
+      tool_pos_status_label_->setText(QString("✗ TF 缺失: ") + ex.what());
+      tool_pos_status_label_->setStyleSheet("QLabel { color: red; }");
+    }
+  }
+
   QGroupBox* createLogGroup()
   {
     auto* group = new QGroupBox("操作日志");
@@ -537,6 +617,14 @@ private:
 
   void recordSample(uint8_t profile_type, const char* label)
   {
+    // ── Safety: log current tool position for traceability ──
+    std::ostringstream pose_log;
+    pose_log << std::fixed << std::setprecision(4)
+             << "当前 tool0 位姿: x=" << last_tool_x_ << " y=" << last_tool_y_
+             << " z=" << last_tool_z_ << " roll=" << last_tool_roll_
+             << " pitch=" << last_tool_pitch_ << " yaw=" << last_tool_yaw_;
+    logOperation(QString::fromStdString(pose_log.str()));
+
     StepControl srv;
     srv.request.profile_type = profile_type;
     srv.request.step_index = next_step_index_++;
@@ -558,6 +646,12 @@ private:
     QString msg = QString::fromStdString(status.str());
     status_label_->setText(msg);
     logOperation(srv.response.accepted ? "✓ " : "✗ " + msg);
+
+    // ── Safety: warn if sample count is low ──
+    if (srv.response.accepted && srv.response.samples_collected < 6)
+    {
+      logOperation("⚠ 建议至少采集 6 个不同姿态的样本以获得可靠的辨识结果");
+    }
   }
 
   // ═══════════════════════════════════════════════════════════════
@@ -609,6 +703,19 @@ private:
   QSpinBox* min_samples_spin_{nullptr};
   QPlainTextEdit* log_view_{nullptr};
   QPushButton* clear_log_button_{nullptr};
+  QLabel* tool_pos_x_label_{nullptr};
+  QLabel* tool_pos_y_label_{nullptr};
+  QLabel* tool_pos_z_label_{nullptr};
+  QLabel* tool_pos_roll_label_{nullptr};
+  QLabel* tool_pos_pitch_label_{nullptr};
+  QLabel* tool_pos_yaw_label_{nullptr};
+  QLabel* tool_pos_status_label_{nullptr};
+  double last_tool_x_{0.0};
+  double last_tool_y_{0.0};
+  double last_tool_z_{0.0};
+  double last_tool_roll_{0.0};
+  double last_tool_pitch_{0.0};
+  double last_tool_yaw_{0.0};
   uint32_t next_step_index_{0};
 };
 }  // namespace tool_gravity_compensation
