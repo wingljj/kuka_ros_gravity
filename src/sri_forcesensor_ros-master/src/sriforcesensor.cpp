@@ -131,8 +131,8 @@ int main(int argc, char **argv)
 
   if (argc != 3) {
       std::cerr << "Usage: rosrun rosnode <IP address>  <Publish Rate>" << std::endl;
-      std::cerr << "Default IP is: 192.168.0.108 (Network of PC can be set to 192.168.0.2)" << std::endl;
-      std::cerr << "Default Publish Rate can be 200" << std::endl;
+      std::cerr << "默认 IP: 192.168.0.108 (PC 网络可设置为 192.168.0.2)" << std::endl;
+      std::cerr << "默认发布频率可为 200" << std::endl;
       return 1;
   }
 
