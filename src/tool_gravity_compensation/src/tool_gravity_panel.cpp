@@ -11,6 +11,7 @@
 
 #include <QCheckBox>
 #include <QComboBox>
+#include <QDateTime>
 #include <QDoubleSpinBox>
 #include <QFormLayout>
 #include <QGridLayout>
@@ -18,7 +19,9 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
+#include <QPlainTextEdit>
 #include <QPushButton>
+#include <QScrollBar>
 #include <QSpinBox>
 #include <QTimer>
 #include <QVBoxLayout>
@@ -58,28 +61,50 @@ public:
     : rviz::Panel(parent)
     , nh_()
   {
-    auto* layout = new QVBoxLayout;
+    auto* main_layout = new QVBoxLayout;
+    main_layout->setSpacing(4);
 
+    // ── Two-column settings area ──
+    auto* columns = new QHBoxLayout;
+    auto* left_col = new QVBoxLayout;
+    auto* right_col = new QVBoxLayout;
+    left_col->setSpacing(4);
+    right_col->setSpacing(4);
+
+    left_col->addWidget(createConnectionGroup());
+    left_col->addWidget(createMountGroup());
+    left_col->addStretch();
+
+    right_col->addWidget(createSamplingGroup());
+    right_col->addWidget(createSafetyGroup());
+    right_col->addStretch();
+
+    columns->addLayout(left_col, 1);
+    columns->addLayout(right_col, 1);
+    main_layout->addLayout(columns);
+
+    // ── Full-width acquisition ──
+    main_layout->addWidget(createAcquisitionGroup());
+
+    // ── Compact status line ──
     status_label_ = new QLabel("就绪。需要手动确认。");
     status_label_->setWordWrap(true);
-    result_label_ = new QLabel("尚无负载结果。");
-    result_label_->setWordWrap(true);
+    status_label_->setStyleSheet("QLabel { color: #333; font-weight: bold; padding: 2px; }");
+    main_layout->addWidget(status_label_);
 
-    layout->addWidget(createConnectionGroup());
-    layout->addWidget(createMountGroup());
-    layout->addWidget(createSamplingGroup());
-    layout->addWidget(createSafetyGroup());
-    layout->addWidget(createAcquisitionGroup());
-    layout->addWidget(status_label_);
-    layout->addWidget(result_label_);
-    setLayout(layout);
+    // ── Operation log ──
+    main_layout->addWidget(createLogGroup());
 
+    setLayout(main_layout);
+
+    // ── Service clients ──
     step_client_ = nh_.serviceClient<StepControl>("step_control");
     compute_client_ = nh_.serviceClient<ComputePayload>("compute_payload");
     sensor_mount_client_ = nh_.serviceClient<SetSensorMount>("set_sensor_mount");
     sampling_config_client_ = nh_.serviceClient<SetSamplingConfig>("set_sampling_config");
     sri_filter_client_ = nh_.serviceClient<sriforcesensor::SetFilterConfig>("sri_ft_sensor/set_filter_config");
 
+    // ── Signal/slot connections ──
     connect(apply_mount_button_, SIGNAL(clicked()), this, SLOT(onApplyMountClicked()));
     connect(check_tf_button_, SIGNAL(clicked()), this, SLOT(onCheckTfClicked()));
     connect(apply_sampling_button_, SIGNAL(clicked()), this, SLOT(onApplySamplingClicked()));
@@ -88,6 +113,7 @@ public:
     connect(compute_button_, SIGNAL(clicked()), this, SLOT(onComputeClicked()));
     connect(clear_profiles_button_, SIGNAL(clicked()), this, SLOT(onClearProfilesClicked()));
     connect(refresh_status_button_, SIGNAL(clicked()), this, SLOT(onRefreshStatusClicked()));
+    connect(clear_log_button_, SIGNAL(clicked()), this, SLOT(onClearLogClicked()));
 
     connect(estop_check_, SIGNAL(stateChanged(int)), this, SLOT(updateSafetyGate()));
     connect(teach_pendant_check_, SIGNAL(stateChanged(int)), this, SLOT(updateSafetyGate()));
@@ -99,11 +125,14 @@ public:
     refresh_timer_ = new QTimer(this);
     connect(refresh_timer_, SIGNAL(timeout()), this, SLOT(onRefreshStatusClicked()));
     refresh_timer_->start(1000);
+
+    logOperation("面板已初始化，等待操作...");
   }
 
 private Q_SLOTS:
   void onApplyMountClicked()
   {
+    logOperation("▶ 应用传感器安装参数...");
     SetSensorMount srv;
     srv.request.parent_frame = "tool0";
     srv.request.child_frame = "sri_ft_sensor";
@@ -118,13 +147,17 @@ private Q_SLOTS:
     if (!sensor_mount_client_.waitForExistence(ros::Duration(0.2)) || !sensor_mount_client_.call(srv))
     {
       status_label_->setText("set_sensor_mount 服务不可用。");
+      logOperation("✗ set_sensor_mount 服务不可用");
       return;
     }
-    status_label_->setText(QString::fromStdString(srv.response.message));
+    QString msg = QString::fromStdString(srv.response.message);
+    status_label_->setText(msg);
+    logOperation("✓ " + msg);
   }
 
   void onCheckTfClicked()
   {
+    logOperation("▶ 检查 TF tool0 → sri_ft_sensor...");
     tf::StampedTransform transform;
     try
     {
@@ -136,15 +169,19 @@ private Q_SLOTS:
              << transform.getOrigin().y() << ", "
              << transform.getOrigin().z() << "]";
       status_label_->setText(QString::fromStdString(stream.str()));
+      logOperation("✓ " + QString::fromStdString(stream.str()));
     }
     catch (const tf::TransformException& ex)
     {
-      status_label_->setText(QString("TF缺失: ") + ex.what());
+      QString msg = QString("TF缺失: ") + ex.what();
+      status_label_->setText(msg);
+      logOperation("✗ " + msg);
     }
   }
 
   void onApplySamplingClicked()
   {
+    logOperation("▶ 应用滤波/采样配置...");
     SetSamplingConfig srv;
     srv.request.apply = true;
     srv.request.clear_profiles = false;
@@ -179,6 +216,7 @@ private Q_SLOTS:
     if (!sampling_config_client_.waitForExistence(ros::Duration(0.2)) || !sampling_config_client_.call(srv))
     {
       status_label_->setText("set_sampling_config 服务不可用。");
+      logOperation("✗ set_sampling_config 服务不可用");
       return;
     }
 
@@ -196,21 +234,26 @@ private Q_SLOTS:
     {
       status << " | SRI 滤波服务缺失或被拒绝";
     }
-    status_label_->setText(QString::fromStdString(status.str()));
+    QString msg = QString::fromStdString(status.str());
+    status_label_->setText(msg);
+    logOperation("✓ " + msg);
   }
 
   void onToolOnlyClicked()
   {
+    logOperation("▶ 记录 TOOL_ONLY 样本...");
     recordSample(StepControl::Request::TOOL_ONLY, "TOOL_ONLY");
   }
 
   void onToolPlusPayloadClicked()
   {
+    logOperation("▶ 记录 TOOL_PLUS_PAYLOAD 样本...");
     recordSample(StepControl::Request::TOOL_PLUS_PAYLOAD, "TOOL_PLUS_PAYLOAD");
   }
 
   void onComputeClicked()
   {
+    logOperation("▶ 计算负载参数...");
     ComputePayload srv;
     srv.request.compute = true;
     srv.request.min_samples = static_cast<uint32_t>(min_samples_spin_->value());
@@ -218,12 +261,15 @@ private Q_SLOTS:
     if (!compute_client_.waitForExistence(ros::Duration(0.2)) || !compute_client_.call(srv))
     {
       status_label_->setText("compute_payload 服务不可用。");
+      logOperation("✗ compute_payload 服务不可用");
       return;
     }
 
-    status_label_->setText(QString::fromStdString(srv.response.message));
+    QString msg = QString::fromStdString(srv.response.message);
+    status_label_->setText(msg);
     if (!srv.response.success)
     {
+      logOperation("✗ " + msg);
       return;
     }
 
@@ -236,12 +282,15 @@ private Q_SLOTS:
            << srv.response.result.com_sensor.y << ", "
            << srv.response.result.com_sensor.z << "] m\n"
            << "工具质量: " << srv.response.result.tool_mass << " kg";
-    result_label_->setText(QString::fromStdString(result.str()));
+    QString result_str = QString::fromStdString(result.str());
+    status_label_->setText("✓ 负载计算完成");
+    logOperation("✓ 负载计算完成:\n" + result_str);
     ROS_INFO_STREAM("负载结果: " << result.str());
   }
 
   void onClearProfilesClicked()
   {
+    logOperation("▶ 清除采集配置...");
     SetSamplingConfig srv;
     srv.request.apply = true;
     srv.request.clear_profiles = true;
@@ -254,11 +303,19 @@ private Q_SLOTS:
     if (!sampling_config_client_.waitForExistence(ros::Duration(0.2)) || !sampling_config_client_.call(srv))
     {
       status_label_->setText("set_sampling_config 服务不可用。");
+      logOperation("✗ set_sampling_config 服务不可用");
       return;
     }
     next_step_index_ = 0;
-    result_label_->setText("配置已清除。请先记录仅工具，再记录工具加负载。");
-    status_label_->setText(QString::fromStdString(srv.response.message));
+    QString msg = QString::fromStdString(srv.response.message);
+    status_label_->setText(msg);
+    logOperation("✓ 配置已清除。请先记录仅工具，再记录工具加负载。");
+  }
+
+  void onClearLogClicked()
+  {
+    log_view_->clear();
+    logOperation("日志已清除");
   }
 
   void updateSafetyGate()
@@ -268,11 +325,17 @@ private Q_SLOTS:
                       fence_check_->isChecked() &&
                       low_speed_check_->isChecked() &&
                       tool_fixed_check_->isChecked();
+    const bool was_safe = tool_button_->isEnabled();
     tool_button_->setEnabled(safe);
     total_button_->setEnabled(safe);
     compute_button_->setEnabled(safe);
     safety_label_->setText(safe ? "安全检查已完成。" :
                                   "采样前请完成安全检查。");
+    if (safe != was_safe)
+    {
+      logOperation(safe ? "✓ 安全检查已全部通过，采样已启用" :
+                          "⚠ 安全检查未完成，采样已禁用");
+    }
   }
 
   void onRefreshStatusClicked()
@@ -305,13 +368,30 @@ private Q_SLOTS:
            << " | sri filter " << (sri_filter_ok ? "正常" : "缺失")
            << " | TF " << (tf_ok ? "正常" : "缺失");
     connection_status_label_->setText(QString::fromStdString(stream.str()));
+    // Only log on manual refresh (not timer-driven) to avoid spam
+    // Timer-driven refresh is silent; manual clicks are logged via the button slot
   }
 
 private:
+  // ── Helper: append timestamped message to operation log ──
+  void logOperation(const QString& message)
+  {
+    QString timestamp = QDateTime::currentDateTime().toString("hh:mm:ss");
+    log_view_->appendPlainText("[" + timestamp + "] " + message);
+    // Auto-scroll to bottom
+    QScrollBar* bar = log_view_->verticalScrollBar();
+    bar->setValue(bar->maximum());
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  //  Group creators
+  // ═══════════════════════════════════════════════════════════════
+
   QGroupBox* createConnectionGroup()
   {
     auto* group = new QGroupBox("连接");
     auto* form = new QFormLayout;
+    form->setHorizontalSpacing(6);
     mode_combo_ = new QComboBox;
     mode_combo_->addItem("离线仿真");
     mode_combo_->addItem("真实传感器");
@@ -336,8 +416,10 @@ private:
 
   QGroupBox* createMountGroup()
   {
-    auto* group = new QGroupBox("传感器安装 tool0 -> sri_ft_sensor");
+    auto* group = new QGroupBox("传感器安装 tool0 → sri_ft_sensor");
     auto* layout = new QGridLayout;
+    layout->setHorizontalSpacing(4);
+    layout->setVerticalSpacing(2);
     mount_x_ = makeDoubleSpin(-5.0, 5.0, 0.0);
     mount_y_ = makeDoubleSpin(-5.0, 5.0, 0.0);
     mount_z_ = makeDoubleSpin(-5.0, 5.0, 0.0);
@@ -352,11 +434,11 @@ private:
     layout->addWidget(mount_y_, 0, 3);
     layout->addWidget(new QLabel("z 米"), 0, 4);
     layout->addWidget(mount_z_, 0, 5);
-    layout->addWidget(new QLabel("滚转 弧度"), 1, 0);
+    layout->addWidget(new QLabel("滚转 rad"), 1, 0);
     layout->addWidget(mount_roll_, 1, 1);
-    layout->addWidget(new QLabel("俯仰 弧度"), 1, 2);
+    layout->addWidget(new QLabel("俯仰 rad"), 1, 2);
     layout->addWidget(mount_pitch_, 1, 3);
-    layout->addWidget(new QLabel("偏航 弧度"), 1, 4);
+    layout->addWidget(new QLabel("偏航 rad"), 1, 4);
     layout->addWidget(mount_yaw_, 1, 5);
     layout->addWidget(apply_mount_button_, 2, 0, 1, 3);
     layout->addWidget(check_tf_button_, 2, 3, 1, 3);
@@ -368,6 +450,7 @@ private:
   {
     auto* group = new QGroupBox("滤波与稳定窗口");
     auto* form = new QFormLayout;
+    form->setHorizontalSpacing(6);
     filter_enabled_check_ = new QCheckBox;
     filter_enabled_check_->setChecked(true);
     filter_window_spin_ = makeIntSpin(1, 200, 10);
@@ -391,6 +474,7 @@ private:
   {
     auto* group = new QGroupBox("安全检查清单");
     auto* layout = new QVBoxLayout;
+    layout->setSpacing(2);
     estop_check_ = new QCheckBox("急停按钮可达");
     teach_pendant_check_ = new QCheckBox("示教器由操作员持有");
     fence_check_ = new QCheckBox("安全区域已清空");
@@ -398,6 +482,7 @@ private:
     tool_fixed_check_ = new QCheckBox("工具和负载已固定");
     safety_label_ = new QLabel;
     safety_label_->setWordWrap(true);
+    safety_label_->setStyleSheet("QLabel { color: #555; font-style: italic; }");
     layout->addWidget(estop_check_);
     layout->addWidget(teach_pendant_check_);
     layout->addWidget(fence_check_);
@@ -430,6 +515,26 @@ private:
     return group;
   }
 
+  QGroupBox* createLogGroup()
+  {
+    auto* group = new QGroupBox("操作日志");
+    auto* layout = new QVBoxLayout;
+    layout->setSpacing(2);
+
+    log_view_ = new QPlainTextEdit;
+    log_view_->setReadOnly(true);
+    log_view_->setMaximumBlockCount(500);
+    log_view_->setPlaceholderText("操作记录将显示在此处...");
+    log_view_->setStyleSheet("QPlainTextEdit { font-family: monospace; font-size: 11px; }");
+
+    clear_log_button_ = new QPushButton("清除日志");
+
+    layout->addWidget(log_view_);
+    layout->addWidget(clear_log_button_);
+    group->setLayout(layout);
+    return group;
+  }
+
   void recordSample(uint8_t profile_type, const char* label)
   {
     StepControl srv;
@@ -443,14 +548,21 @@ private:
     if (!step_client_.waitForExistence(ros::Duration(0.2)) || !step_client_.call(srv))
     {
       status_label_->setText("step_control 服务不可用。");
+      logOperation("✗ step_control 服务不可用");
       return;
     }
 
     std::ostringstream status;
     status << label << ": " << srv.response.message
            << " (已采集样本=" << srv.response.samples_collected << ")";
-    status_label_->setText(QString::fromStdString(status.str()));
+    QString msg = QString::fromStdString(status.str());
+    status_label_->setText(msg);
+    logOperation(srv.response.accepted ? "✓ " : "✗ " + msg);
   }
+
+  // ═══════════════════════════════════════════════════════════════
+  //  Members
+  // ═══════════════════════════════════════════════════════════════
 
   ros::NodeHandle nh_;
   ros::ServiceClient step_client_;
@@ -462,7 +574,6 @@ private:
   QTimer* refresh_timer_{nullptr};
 
   QLabel* status_label_{nullptr};
-  QLabel* result_label_{nullptr};
   QLabel* connection_status_label_{nullptr};
   QLabel* safety_label_{nullptr};
   QComboBox* mode_combo_{nullptr};
@@ -496,6 +607,8 @@ private:
   QPushButton* compute_button_{nullptr};
   QPushButton* clear_profiles_button_{nullptr};
   QSpinBox* min_samples_spin_{nullptr};
+  QPlainTextEdit* log_view_{nullptr};
+  QPushButton* clear_log_button_{nullptr};
   uint32_t next_step_index_{0};
 };
 }  // namespace tool_gravity_compensation
