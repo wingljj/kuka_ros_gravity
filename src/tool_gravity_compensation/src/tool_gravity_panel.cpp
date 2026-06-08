@@ -21,6 +21,7 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QPlainTextEdit>
+#include <QProcess>
 #include <QPushButton>
 #include <QScrollBar>
 #include <QSpinBox>
@@ -126,6 +127,7 @@ public:
     connect(total_button_, SIGNAL(clicked()), this, SLOT(onToolPlusPayloadClicked()));
     connect(compute_button_, SIGNAL(clicked()), this, SLOT(onComputeClicked()));
     connect(clear_profiles_button_, SIGNAL(clicked()), this, SLOT(onClearProfilesClicked()));
+    connect(mode_combo_, SIGNAL(currentIndexChanged(int)), this, SLOT(onModeChanged(int)));
     connect(sensor_connect_button_, SIGNAL(clicked()), this, SLOT(onConnectSensorClicked()));
     connect(robot_connect_button_, SIGNAL(clicked()), this, SLOT(onConnectRobotClicked()));
     connect(clear_log_button_, SIGNAL(clicked()), this, SLOT(onClearLogClicked()));
@@ -141,7 +143,24 @@ public:
     connect(refresh_timer_, SIGNAL(timeout()), this, SLOT(onRefreshStatusClicked()));
     refresh_timer_->start(1000);
 
+    // Init mode state (default: offline simulation)
+    onModeChanged(0);
+
     logOperation("上海卫星装备研究所 · 机械臂负载测试系统 v2.0 已就绪");
+  }
+
+  ~ToolGravityPanel() override
+  {
+    if (sensor_process_ && sensor_process_->state() != QProcess::NotRunning)
+    {
+      sensor_process_->terminate();
+      sensor_process_->waitForFinished(3000);
+    }
+    if (robot_process_ && robot_process_->state() != QProcess::NotRunning)
+    {
+      robot_process_->terminate();
+      robot_process_->waitForFinished(3000);
+    }
   }
 
 private Q_SLOTS:
@@ -355,39 +374,76 @@ private Q_SLOTS:
 
   void onRefreshStatusClicked()
   {
-    // Update tool position readout
     updateToolPosition();
 
-    // ── Sensor status: check if wrench messages are arriving ──
-    const double dt = (ros::Time::now() - last_wrench_stamp_).toSec();
-    const bool sensor_data_flowing = (dt < 2.0 && last_wrench_stamp_ != ros::Time(0));
-    if (sensor_data_flowing)
+    if (!sensor_connected_ && !robot_connected_)
+      return;  // Nothing to monitor
+
+    // ── Sensor: check real hardware via raw_wrench topic (only SRI driver publishes raw) ──
+    if (sensor_connected_)
     {
-      double hz = (dt > 0.001) ? (1.0 / dt) : 0.0;
-      sensor_status_label_->setText(QString("● 已连接 (%1 Hz)").arg(hz, 0, 'f', 0));
-      sensor_status_label_->setStyleSheet("QLabel { color: #4CAF50; font-size: 10px; font-weight: bold; }");
-      sensor_connect_button_->setChecked(true);
-      sensor_connect_button_->setText("已连接");
-    }
-    else if (sensor_connect_button_->isChecked())
-    {
-      sensor_status_label_->setText("● 检测中...");
-      sensor_status_label_->setStyleSheet("QLabel { color: #FF9800; font-size: 10px; }");
+      const double dt = (ros::Time::now() - last_wrench_stamp_).toSec();
+      const bool data_flowing = (dt < 2.0 && last_wrench_stamp_ != ros::Time(0));
+
+      // Verify it's the real sensor, not simulator: check raw_wrench topic
+      bool real_sensor = false;
+      ros::master::V_TopicInfo topics;
+      if (ros::master::getTopics(topics))
+      {
+        for (const auto& t : topics)
+        {
+          if (t.name == "/sri_ft_sensor/raw_wrench" && !t.datatype.empty())
+            real_sensor = true;
+        }
+      }
+
+      if (data_flowing && real_sensor)
+      {
+        double hz = (dt > 0.001) ? (1.0 / dt) : 0.0;
+        sensor_status_label_->setText(QString("● 已连接 (%1 Hz)").arg(hz, 0, 'f', 0));
+        sensor_status_label_->setStyleSheet("QLabel { color: #4CAF50; font-size: 10px; font-weight: bold; }");
+      }
+      else if (data_flowing && !real_sensor)
+      {
+        sensor_status_label_->setText("⚠ 仿真数据");
+        sensor_status_label_->setStyleSheet("QLabel { color: #FF9800; font-size: 10px; font-weight: bold; }");
+      }
+      else
+      {
+        sensor_status_label_->setText("● 无数据");
+        sensor_status_label_->setStyleSheet("QLabel { color: #FF9800; font-size: 10px; }");
+      }
     }
 
-    // ── Robot status: check if step_control service exists ──
-    const bool robot_ok = step_client_.exists();
-    if (robot_ok)
+    // ── Robot: check EKI hardware node ──
+    if (robot_connected_)
     {
-      robot_status_label_->setText("● 已连接");
-      robot_status_label_->setStyleSheet("QLabel { color: #4CAF50; font-size: 10px; font-weight: bold; }");
-      robot_connect_button_->setChecked(true);
-      robot_connect_button_->setText("已连接");
-    }
-    else if (robot_connect_button_->isChecked())
-    {
-      robot_status_label_->setText("● 检测中...");
-      robot_status_label_->setStyleSheet("QLabel { color: #FF9800; font-size: 10px; }");
+      bool eki_running = false;
+      ros::V_string nodes;
+      if (ros::master::getNodes(nodes))
+      {
+        for (const auto& n : nodes)
+        {
+          if (n.find("kuka_eki") != std::string::npos || n.find("eki_hw") != std::string::npos)
+          { eki_running = true; break; }
+        }
+      }
+
+      if (eki_running && step_client_.exists())
+      {
+        robot_status_label_->setText("● 已连接");
+        robot_status_label_->setStyleSheet("QLabel { color: #4CAF50; font-size: 10px; font-weight: bold; }");
+      }
+      else if (!eki_running)
+      {
+        robot_status_label_->setText("● EKI 未运行");
+        robot_status_label_->setStyleSheet("QLabel { color: #f44336; font-size: 10px; font-weight: bold; }");
+      }
+      else
+      {
+        robot_status_label_->setText("● 检测中...");
+        robot_status_label_->setStyleSheet("QLabel { color: #FF9800; font-size: 10px; }");
+      }
     }
   }
 
@@ -396,50 +452,203 @@ private Q_SLOTS:
     last_wrench_stamp_ = msg->header.stamp;
   }
 
-  void onConnectSensorClicked()
+  void onModeChanged(int index)
   {
-    if (sensor_connect_button_->isChecked())
+    // 0=离线仿真, 1=真实传感器, 2=真实机器人
+    const bool sim_mode = (index == 0);
+    const bool sensor_mode = (index >= 1);
+    const bool robot_mode = (index == 2);
+
+    // Disconnect and kill processes if switching away from a mode
+    if (!sensor_mode && sensor_connected_)
     {
-      logOperation("▶ 尝试连接 SRI 力传感器 " + sensor_ip_edit_->text() + "...");
-      sensor_status_label_->setText("● 检测中...");
-      sensor_status_label_->setStyleSheet("QLabel { color: #FF9800; font-size: 10px; }");
-      sensor_connect_button_->setText("检测中...");
-      // Store sensor IP to param server
-      nh_.setParam("/sri_forcesensor/sensor_ip", sensor_ip_edit_->text().toStdString());
-      nh_.setParam("/sri_forcesensor/publish_rate", publish_rate_spin_->value());
-      // Connection is verified by the timer checking wrench data flow
-      logOperation("  等待传感器数据... (请确保传感器节点已启动)");
+      logOperation("⚠ 模式切换：自动断开传感器");
+      disconnectSensor();
+    }
+    if (!robot_mode && robot_connected_)
+    {
+      logOperation("⚠ 模式切换：自动断开机器人");
+      disconnectRobot();
+    }
+
+    // Show/hide entire connection rows
+    sensor_row_widget_->setVisible(sensor_mode);
+    robot_row_widget_->setVisible(robot_mode);
+
+    if (sim_mode)
+    {
+      sensor_status_label_->setText("仿真模式");
+      sensor_status_label_->setStyleSheet("QLabel { color: #2196F3; font-size: 10px; font-weight: bold; }");
+      robot_status_label_->setText("仿真模式");
+      robot_status_label_->setStyleSheet("QLabel { color: #2196F3; font-size: 10px; font-weight: bold; }");
+      logOperation("ℹ 切换到离线仿真模式");
+    }
+    else if (sensor_mode && !robot_mode)
+    {
+      logOperation("ℹ 切换到真实传感器模式");
     }
     else
     {
-      logOperation("▶ 断开传感器连接");
-      sensor_status_label_->setText("● 未连接");
-      sensor_status_label_->setStyleSheet("QLabel { color: #999; font-size: 10px; }");
-      sensor_connect_button_->setText("连接传感器");
-      last_wrench_stamp_ = ros::Time(0);
+      logOperation("ℹ 切换到真实机器人模式（传感器+机器人）");
     }
+
+    nh_.setParam("/tool_gravity_compensation/run_mode", mode_combo_->currentText().toStdString());
+    updateConnectionUI();
+  }
+
+  void onConnectSensorClicked()
+  {
+    if (sensor_connected_)
+    {
+      disconnectSensor();
+      return;
+    }
+
+    const QString ip = sensor_ip_edit_->text();
+    const int rate = publish_rate_spin_->value();
+
+    logOperation("▶ 启动 SRI 力传感器节点 " + ip + ":" + QString::number(4008) + " @" + QString::number(rate) + "Hz");
+    sensor_status_label_->setText("● 启动中...");
+    sensor_status_label_->setStyleSheet("QLabel { color: #FF9800; font-size: 10px; }");
+
+    sensor_process_ = new QProcess(this);
+    QStringList args;
+    args << "sriforcesensor" << "sri_ft_sensor.launch"
+         << "sensor_ip:=" + ip
+         << "publish_rate:=" + QString::number(rate)
+         << "filter_enabled:=true"
+         << "--screen";
+    // Capture output for logging
+    connect(sensor_process_, &QProcess::readyReadStandardOutput, this, [this]() {
+      logOperation("[传感器] " + QString::fromLocal8Bit(sensor_process_->readAllStandardOutput()).trimmed());
+    });
+    connect(sensor_process_, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
+            this, [this](int code, QProcess::ExitStatus) {
+      if (code != 0 && sensor_connected_)
+        logOperation("⚠ 传感器节点异常退出 (code=" + QString::number(code) + ")");
+    });
+    connect(sensor_process_, &QProcess::errorOccurred, this, [this](QProcess::ProcessError err) {
+      logOperation("✗ 传感器启动失败: " + QString::number(err));
+      disconnectSensor();
+    });
+    sensor_process_->setProcessChannelMode(QProcess::MergedChannels);
+    sensor_process_->start("roslaunch", args);
+
+    sensor_connected_ = true;
+    last_wrench_stamp_ = ros::Time(0);
+    updateConnectionUI();
   }
 
   void onConnectRobotClicked()
   {
-    if (robot_connect_button_->isChecked())
+    if (robot_connected_)
     {
-      logOperation("▶ 尝试连接 KR240 机器人 " + robot_ip_edit_->text() + ":" +
-                   QString::number(eki_port_spin_->value()) + "...");
-      robot_status_label_->setText("● 检测中...");
-      robot_status_label_->setStyleSheet("QLabel { color: #FF9800; font-size: 10px; }");
-      robot_connect_button_->setText("检测中...");
-      nh_.setParam("/kuka_eki/robot_ip", robot_ip_edit_->text().toStdString());
-      nh_.setParam("/kuka_eki/port", eki_port_spin_->value());
-      // Connection is verified by the timer checking step_control service
-      logOperation("  等待机器人连接... (请确保 EKI 接口和 MoveIt 已启动)");
+      disconnectRobot();
+      return;
+    }
+
+    const QString ip = robot_ip_edit_->text();
+    const int port = eki_port_spin_->value();
+
+    logOperation("▶ 启动 KR240 机器人节点 " + ip + ":" + QString::number(port));
+    robot_status_label_->setText("● 启动中...");
+    robot_status_label_->setStyleSheet("QLabel { color: #FF9800; font-size: 10px; }");
+
+    robot_process_ = new QProcess(this);
+    QStringList args;
+    // Launch the real identification pipeline (without RViz since it's already running)
+    args << "tool_gravity_compensation" << "kr240_real_payload_identification.launch"
+         << "robot_ip:=" + ip
+         << "eki_port:=" + QString::number(port)
+         << "sensor_ip:=" + sensor_ip_edit_->text()
+         << "publish_rate:=" + QString::number(publish_rate_spin_->value())
+         << "use_rviz:=false"
+         << "allow_trajectory_execution:=false"
+         << "--screen";
+
+    connect(robot_process_, &QProcess::readyReadStandardOutput, this, [this]() {
+      logOperation("[机器人] " + QString::fromLocal8Bit(robot_process_->readAllStandardOutput()).trimmed());
+    });
+    connect(robot_process_, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
+            this, [this](int code, QProcess::ExitStatus) {
+      if (code != 0 && robot_connected_)
+        logOperation("⚠ 机器人节点异常退出 (code=" + QString::number(code) + ")");
+    });
+    connect(robot_process_, &QProcess::errorOccurred, this, [this](QProcess::ProcessError err) {
+      logOperation("✗ 机器人启动失败: " + QString::number(err));
+      disconnectRobot();
+    });
+    robot_process_->setProcessChannelMode(QProcess::MergedChannels);
+    robot_process_->start("roslaunch", args);
+
+    robot_connected_ = true;
+    updateConnectionUI();
+  }
+
+  void disconnectSensor()
+  {
+    sensor_connected_ = false;
+    last_wrench_stamp_ = ros::Time(0);
+    if (sensor_process_)
+    {
+      sensor_process_->terminate();
+      sensor_process_->waitForFinished(2000);
+      sensor_process_->deleteLater();
+      sensor_process_ = nullptr;
+    }
+    // Also kill any orphan sensor nodes
+    QProcess::execute("rosnode", QStringList() << "kill" << "/sri_forcesensor");
+    sensor_status_label_->setText("● 已断开");
+    sensor_status_label_->setStyleSheet("QLabel { color: #999; font-size: 10px; }");
+    logOperation("✓ 传感器已断开");
+    updateConnectionUI();
+  }
+
+  void disconnectRobot()
+  {
+    robot_connected_ = false;
+    if (robot_process_)
+    {
+      robot_process_->terminate();
+      robot_process_->waitForFinished(3000);
+      robot_process_->deleteLater();
+      robot_process_ = nullptr;
+    }
+    // Kill associated nodes
+    QProcess::execute("rosnode", QStringList() << "kill" << "/collect_load_profile_server");
+    QProcess::execute("rosnode", QStringList() << "kill" << "/sensor_mount_tf_manager");
+    robot_status_label_->setText("● 已断开");
+    robot_status_label_->setStyleSheet("QLabel { color: #999; font-size: 10px; }");
+    logOperation("✓ 机器人已断开");
+    updateConnectionUI();
+  }
+
+  void updateConnectionUI()
+  {
+    if (sensor_connected_)
+    {
+      sensor_connect_button_->setText("断开传感器");
+      sensor_connect_button_->setStyleSheet(
+        "QPushButton { font-weight: bold; padding: 4px 8px; background: #f44336; color: white; }");
     }
     else
     {
-      logOperation("▶ 断开机器人连接");
-      robot_status_label_->setText("● 未连接");
-      robot_status_label_->setStyleSheet("QLabel { color: #999; font-size: 10px; }");
+      sensor_connect_button_->setText("连接传感器");
+      sensor_connect_button_->setStyleSheet(
+        "QPushButton { font-weight: bold; padding: 4px 8px; }");
+    }
+
+    if (robot_connected_)
+    {
+      robot_connect_button_->setText("断开机器人");
+      robot_connect_button_->setStyleSheet(
+        "QPushButton { font-weight: bold; padding: 4px 8px; background: #f44336; color: white; }");
+    }
+    else
+    {
       robot_connect_button_->setText("连接机器人");
+      robot_connect_button_->setStyleSheet(
+        "QPushButton { font-weight: bold; padding: 4px 8px; }");
     }
   }
 
@@ -511,12 +720,12 @@ private:
     layout->addLayout(mode_row);
 
     // ── Sensor connection ──
+    sensor_row_widget_ = new QWidget;
     auto* sensor_row = new QHBoxLayout;
+    sensor_row->setContentsMargins(0, 0, 0, 0);
     sensor_connect_button_ = new QPushButton("连接传感器");
-    sensor_connect_button_->setCheckable(true);
     sensor_connect_button_->setStyleSheet(
       "QPushButton { font-weight: bold; padding: 4px 8px; }"
-      "QPushButton:checked { background: #4CAF50; color: white; }"
     );
     sensor_status_label_ = new QLabel("● 未连接");
     sensor_status_label_->setStyleSheet("QLabel { color: #999; font-size: 10px; }");
@@ -526,15 +735,16 @@ private:
     sensor_row->addWidget(new QLabel("SRI IP"));
     sensor_row->addWidget(sensor_ip_edit_);
     sensor_row->addWidget(sensor_status_label_, 1);
-    layout->addLayout(sensor_row);
+    sensor_row_widget_->setLayout(sensor_row);
+    layout->addWidget(sensor_row_widget_);
 
     // ── Robot connection ──
+    robot_row_widget_ = new QWidget;
     auto* robot_row = new QHBoxLayout;
+    robot_row->setContentsMargins(0, 0, 0, 0);
     robot_connect_button_ = new QPushButton("连接机器人");
-    robot_connect_button_->setCheckable(true);
     robot_connect_button_->setStyleSheet(
       "QPushButton { font-weight: bold; padding: 4px 8px; }"
-      "QPushButton:checked { background: #4CAF50; color: white; }"
     );
     robot_status_label_ = new QLabel("● 未连接");
     robot_status_label_->setStyleSheet("QLabel { color: #999; font-size: 10px; }");
@@ -552,7 +762,8 @@ private:
     robot_row->addWidget(new QLabel("Hz"));
     robot_row->addWidget(publish_rate_spin_);
     robot_row->addWidget(robot_status_label_, 1);
-    layout->addLayout(robot_row);
+    robot_row_widget_->setLayout(robot_row);
+    layout->addWidget(robot_row_widget_);
 
     group->setLayout(layout);
     return group;
@@ -824,9 +1035,15 @@ private:
   QLineEdit* sensor_ip_edit_{nullptr};
   QSpinBox* eki_port_spin_{nullptr};
   QSpinBox* publish_rate_spin_{nullptr};
+  QWidget* sensor_row_widget_{nullptr};
+  QWidget* robot_row_widget_{nullptr};
   QPushButton* sensor_connect_button_{nullptr};
   QPushButton* robot_connect_button_{nullptr};
   ros::Time last_wrench_stamp_{0.0};
+  QProcess* sensor_process_{nullptr};
+  QProcess* robot_process_{nullptr};
+  bool sensor_connected_{false};
+  bool robot_connected_{false};
   QDoubleSpinBox* mount_x_{nullptr};
   QDoubleSpinBox* mount_y_{nullptr};
   QDoubleSpinBox* mount_z_{nullptr};
