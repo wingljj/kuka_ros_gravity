@@ -60,9 +60,9 @@ public:
   {
     auto* layout = new QVBoxLayout;
 
-    status_label_ = new QLabel("Ready. Manual confirmation required.");
+    status_label_ = new QLabel("就绪。需要手动确认。");
     status_label_->setWordWrap(true);
-    result_label_ = new QLabel("No payload result yet.");
+    result_label_ = new QLabel("尚无负载结果。");
     result_label_->setWordWrap(true);
 
     layout->addWidget(createConnectionGroup());
@@ -117,7 +117,7 @@ private Q_SLOTS:
 
     if (!sensor_mount_client_.waitForExistence(ros::Duration(0.2)) || !sensor_mount_client_.call(srv))
     {
-      status_label_->setText("set_sensor_mount service is not available.");
+      status_label_->setText("set_sensor_mount 服务不可用。");
       return;
     }
     status_label_->setText(QString::fromStdString(srv.response.message));
@@ -131,7 +131,7 @@ private Q_SLOTS:
       tf_listener_.lookupTransform("tool0", "sri_ft_sensor", ros::Time(0), transform);
       std::ostringstream stream;
       stream << std::fixed << std::setprecision(4)
-             << "TF ok tool0 -> sri_ft_sensor xyz=["
+             << "TF正常 tool0 -> sri_ft_sensor xyz=["
              << transform.getOrigin().x() << ", "
              << transform.getOrigin().y() << ", "
              << transform.getOrigin().z() << "]";
@@ -139,7 +139,7 @@ private Q_SLOTS:
     }
     catch (const tf::TransformException& ex)
     {
-      status_label_->setText(QString("TF missing: ") + ex.what());
+      status_label_->setText(QString("TF缺失: ") + ex.what());
     }
   }
 
@@ -178,7 +178,7 @@ private Q_SLOTS:
 
     if (!sampling_config_client_.waitForExistence(ros::Duration(0.2)) || !sampling_config_client_.call(srv))
     {
-      status_label_->setText("set_sampling_config service is not available.");
+      status_label_->setText("set_sampling_config 服务不可用。");
       return;
     }
 
@@ -186,7 +186,7 @@ private Q_SLOTS:
     status << srv.response.message;
     if (mode_combo_->currentIndex() == 0)
     {
-      status << " | SRI filter service skipped in offline mode";
+      status << " | 离线模式下跳过 SRI 滤波服务";
     }
     else if (sri_filter_ok)
     {
@@ -194,7 +194,7 @@ private Q_SLOTS:
     }
     else
     {
-      status << " | SRI filter service missing or rejected";
+      status << " | SRI 滤波服务缺失或被拒绝";
     }
     status_label_->setText(QString::fromStdString(status.str()));
   }
@@ -217,7 +217,7 @@ private Q_SLOTS:
 
     if (!compute_client_.waitForExistence(ros::Duration(0.2)) || !compute_client_.call(srv))
     {
-      status_label_->setText("compute_payload service is not available.");
+      status_label_->setText("compute_payload 服务不可用。");
       return;
     }
 
@@ -229,15 +229,15 @@ private Q_SLOTS:
 
     std::ostringstream result;
     result << std::fixed << std::setprecision(4)
-           << "payload mass: " << srv.response.result.mass_kg << " kg\n"
-           << "payload weight: " << srv.response.result.weight_n << " N\n"
-           << "payload com in sri_ft_sensor: ["
+           << "负载质量: " << srv.response.result.mass_kg << " kg\n"
+           << "负载重量: " << srv.response.result.weight_n << " N\n"
+           << "负载质心 (sri_ft_sensor系): ["
            << srv.response.result.com_sensor.x << ", "
            << srv.response.result.com_sensor.y << ", "
            << srv.response.result.com_sensor.z << "] m\n"
-           << "tool mass: " << srv.response.result.tool_mass << " kg";
+           << "工具质量: " << srv.response.result.tool_mass << " kg";
     result_label_->setText(QString::fromStdString(result.str()));
-    ROS_INFO_STREAM("Payload result: " << result.str());
+    ROS_INFO_STREAM("负载结果: " << result.str());
   }
 
   void onClearProfilesClicked()
@@ -253,11 +253,11 @@ private Q_SLOTS:
 
     if (!sampling_config_client_.waitForExistence(ros::Duration(0.2)) || !sampling_config_client_.call(srv))
     {
-      status_label_->setText("set_sampling_config service is not available.");
+      status_label_->setText("set_sampling_config 服务不可用。");
       return;
     }
     next_step_index_ = 0;
-    result_label_->setText("Profiles cleared. Record TOOL_ONLY, then TOOL_PLUS_PAYLOAD.");
+    result_label_->setText("配置已清除。请先记录仅工具，再记录工具加负载。");
     status_label_->setText(QString::fromStdString(srv.response.message));
   }
 
@@ -271,8 +271,8 @@ private Q_SLOTS:
     tool_button_->setEnabled(safe);
     total_button_->setEnabled(safe);
     compute_button_->setEnabled(safe);
-    safety_label_->setText(safe ? "Safety checklist complete." :
-                                  "Complete safety checklist before sampling.");
+    safety_label_->setText(safe ? "安全检查已完成。" :
+                                  "采样前请完成安全检查。");
   }
 
   void onRefreshStatusClicked()
@@ -297,37 +297,37 @@ private Q_SLOTS:
     }
 
     std::ostringstream stream;
-    stream << "ROS " << (master_ok ? "ok" : "missing")
-           << " | step " << (step_ok ? "ok" : "missing")
-           << " | compute " << (compute_ok ? "ok" : "missing")
-           << " | mount " << (mount_ok ? "ok" : "missing")
-           << " | sampling " << (sampling_ok ? "ok" : "missing")
-           << " | sri filter " << (sri_filter_ok ? "ok" : "missing")
-           << " | TF " << (tf_ok ? "ok" : "missing");
+    stream << "ROS " << (master_ok ? "正常" : "缺失")
+           << " | step " << (step_ok ? "正常" : "缺失")
+           << " | compute " << (compute_ok ? "正常" : "缺失")
+           << " | mount " << (mount_ok ? "正常" : "缺失")
+           << " | sampling " << (sampling_ok ? "正常" : "缺失")
+           << " | sri filter " << (sri_filter_ok ? "正常" : "缺失")
+           << " | TF " << (tf_ok ? "正常" : "缺失");
     connection_status_label_->setText(QString::fromStdString(stream.str()));
   }
 
 private:
   QGroupBox* createConnectionGroup()
   {
-    auto* group = new QGroupBox("Connection");
+    auto* group = new QGroupBox("连接");
     auto* form = new QFormLayout;
     mode_combo_ = new QComboBox;
-    mode_combo_->addItem("Offline fake");
-    mode_combo_->addItem("Real sensor");
-    mode_combo_->addItem("Real robot");
+    mode_combo_->addItem("离线仿真");
+    mode_combo_->addItem("真实传感器");
+    mode_combo_->addItem("真实机器人");
     robot_ip_edit_ = new QLineEdit("172.31.1.147");
     eki_port_spin_ = makeIntSpin(1, 65535, 54600);
     sensor_ip_edit_ = new QLineEdit("192.168.0.108");
     publish_rate_spin_ = makeIntSpin(1, 1000, 200);
-    refresh_status_button_ = new QPushButton("Refresh status");
-    connection_status_label_ = new QLabel("Status not checked.");
+    refresh_status_button_ = new QPushButton("刷新状态");
+    connection_status_label_ = new QLabel("状态未检查。");
     connection_status_label_->setWordWrap(true);
-    form->addRow("Mode", mode_combo_);
-    form->addRow("Robot IP", robot_ip_edit_);
-    form->addRow("EKI port", eki_port_spin_);
+    form->addRow("模式", mode_combo_);
+    form->addRow("机器人IP", robot_ip_edit_);
+    form->addRow("EKI端口", eki_port_spin_);
     form->addRow("SRI IP", sensor_ip_edit_);
-    form->addRow("SRI rate Hz", publish_rate_spin_);
+    form->addRow("SRI频率 Hz", publish_rate_spin_);
     form->addRow(refresh_status_button_);
     form->addRow(connection_status_label_);
     group->setLayout(form);
@@ -336,7 +336,7 @@ private:
 
   QGroupBox* createMountGroup()
   {
-    auto* group = new QGroupBox("Sensor mount tool0 -> sri_ft_sensor");
+    auto* group = new QGroupBox("传感器安装 tool0 -> sri_ft_sensor");
     auto* layout = new QGridLayout;
     mount_x_ = makeDoubleSpin(-5.0, 5.0, 0.0);
     mount_y_ = makeDoubleSpin(-5.0, 5.0, 0.0);
@@ -344,19 +344,19 @@ private:
     mount_roll_ = makeDoubleSpin(-3.1416, 3.1416, 0.0);
     mount_pitch_ = makeDoubleSpin(-3.1416, 3.1416, 0.0);
     mount_yaw_ = makeDoubleSpin(-3.1416, 3.1416, 0.0);
-    apply_mount_button_ = new QPushButton("Apply mount");
-    check_tf_button_ = new QPushButton("Check TF");
-    layout->addWidget(new QLabel("x m"), 0, 0);
+    apply_mount_button_ = new QPushButton("应用安装");
+    check_tf_button_ = new QPushButton("检查TF");
+    layout->addWidget(new QLabel("x 米"), 0, 0);
     layout->addWidget(mount_x_, 0, 1);
-    layout->addWidget(new QLabel("y m"), 0, 2);
+    layout->addWidget(new QLabel("y 米"), 0, 2);
     layout->addWidget(mount_y_, 0, 3);
-    layout->addWidget(new QLabel("z m"), 0, 4);
+    layout->addWidget(new QLabel("z 米"), 0, 4);
     layout->addWidget(mount_z_, 0, 5);
-    layout->addWidget(new QLabel("roll rad"), 1, 0);
+    layout->addWidget(new QLabel("滚转 弧度"), 1, 0);
     layout->addWidget(mount_roll_, 1, 1);
-    layout->addWidget(new QLabel("pitch rad"), 1, 2);
+    layout->addWidget(new QLabel("俯仰 弧度"), 1, 2);
     layout->addWidget(mount_pitch_, 1, 3);
-    layout->addWidget(new QLabel("yaw rad"), 1, 4);
+    layout->addWidget(new QLabel("偏航 弧度"), 1, 4);
     layout->addWidget(mount_yaw_, 1, 5);
     layout->addWidget(apply_mount_button_, 2, 0, 1, 3);
     layout->addWidget(check_tf_button_, 2, 3, 1, 3);
@@ -366,7 +366,7 @@ private:
 
   QGroupBox* createSamplingGroup()
   {
-    auto* group = new QGroupBox("Filter and stable window");
+    auto* group = new QGroupBox("滤波与稳定窗口");
     auto* form = new QFormLayout;
     filter_enabled_check_ = new QCheckBox;
     filter_enabled_check_->setChecked(true);
@@ -375,13 +375,13 @@ private:
     max_stddev_force_spin_ = makeDoubleSpin(0.0001, 1000.0, 2.0);
     max_stddev_torque_spin_ = makeDoubleSpin(0.0001, 1000.0, 0.2);
     sample_timeout_spin_ = makeDoubleSpin(0.05, 30.0, 1.0, 3);
-    apply_sampling_button_ = new QPushButton("Apply filter/sampling");
-    form->addRow("ROS filter enabled", filter_enabled_check_);
-    form->addRow("Moving average window", filter_window_spin_);
-    form->addRow("Min stable samples", min_stable_samples_spin_);
-    form->addRow("Max force stddev N", max_stddev_force_spin_);
-    form->addRow("Max torque stddev Nm", max_stddev_torque_spin_);
-    form->addRow("Sample timeout s", sample_timeout_spin_);
+    apply_sampling_button_ = new QPushButton("应用滤波/采样");
+    form->addRow("ROS滤波启用", filter_enabled_check_);
+    form->addRow("移动平均窗口", filter_window_spin_);
+    form->addRow("最小稳定样本", min_stable_samples_spin_);
+    form->addRow("最大力标准差 N", max_stddev_force_spin_);
+    form->addRow("最大力矩标准差 Nm", max_stddev_torque_spin_);
+    form->addRow("采样超时 秒", sample_timeout_spin_);
     form->addRow(apply_sampling_button_);
     group->setLayout(form);
     return group;
@@ -389,13 +389,13 @@ private:
 
   QGroupBox* createSafetyGroup()
   {
-    auto* group = new QGroupBox("Safety checklist");
+    auto* group = new QGroupBox("安全检查清单");
     auto* layout = new QVBoxLayout;
-    estop_check_ = new QCheckBox("Emergency stop is reachable");
-    teach_pendant_check_ = new QCheckBox("Teach pendant is held by operator");
-    fence_check_ = new QCheckBox("Safety area is clear");
-    low_speed_check_ = new QCheckBox("Low-speed mode is active");
-    tool_fixed_check_ = new QCheckBox("Tooling and payload are fixed");
+    estop_check_ = new QCheckBox("急停按钮可达");
+    teach_pendant_check_ = new QCheckBox("示教器由操作员持有");
+    fence_check_ = new QCheckBox("安全区域已清空");
+    low_speed_check_ = new QCheckBox("低速模式已激活");
+    tool_fixed_check_ = new QCheckBox("工具和负载已固定");
     safety_label_ = new QLabel;
     safety_label_->setWordWrap(true);
     layout->addWidget(estop_check_);
@@ -410,18 +410,18 @@ private:
 
   QGroupBox* createAcquisitionGroup()
   {
-    auto* group = new QGroupBox("Payload identification");
+    auto* group = new QGroupBox("负载辨识");
     auto* layout = new QVBoxLayout;
     auto* buttons = new QGridLayout;
     auto* compute_layout = new QFormLayout;
-    tool_button_ = new QPushButton("Record TOOL_ONLY");
-    total_button_ = new QPushButton("Record TOOL_PLUS_PAYLOAD");
-    compute_button_ = new QPushButton("Compute Payload");
-    clear_profiles_button_ = new QPushButton("Clear Profiles");
+    tool_button_ = new QPushButton("记录 仅工具");
+    total_button_ = new QPushButton("记录 工具加负载");
+    compute_button_ = new QPushButton("计算负载");
+    clear_profiles_button_ = new QPushButton("清除配置");
     min_samples_spin_ = makeIntSpin(3, 100, 6);
     buttons->addWidget(tool_button_, 0, 0);
     buttons->addWidget(total_button_, 0, 1);
-    compute_layout->addRow("Minimum samples per profile", min_samples_spin_);
+    compute_layout->addRow("每配置最小样本数", min_samples_spin_);
     layout->addLayout(buttons);
     layout->addLayout(compute_layout);
     layout->addWidget(compute_button_);
@@ -442,13 +442,13 @@ private:
 
     if (!step_client_.waitForExistence(ros::Duration(0.2)) || !step_client_.call(srv))
     {
-      status_label_->setText("step_control service is not available.");
+      status_label_->setText("step_control 服务不可用。");
       return;
     }
 
     std::ostringstream status;
     status << label << ": " << srv.response.message
-           << " (samples_collected=" << srv.response.samples_collected << ")";
+           << " (已采集样本=" << srv.response.samples_collected << ")";
     status_label_->setText(QString::fromStdString(status.str()));
   }
 
