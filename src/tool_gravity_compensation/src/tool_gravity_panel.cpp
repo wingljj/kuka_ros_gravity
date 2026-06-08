@@ -63,21 +63,25 @@ public:
     , nh_()
   {
     auto* main_layout = new QVBoxLayout;
-    main_layout->setSpacing(4);
+    main_layout->setSpacing(2);
+    main_layout->setContentsMargins(2, 2, 2, 2);
 
-    // ── Header: logo + title ──
+    // ── Header: logo + title (single line) ──
     main_layout->addWidget(createHeader());
+
+    // ── Tool position bar (compact horizontal) ──
+    main_layout->addWidget(createToolPositionBar());
 
     // ── Two-column settings area ──
     auto* columns = new QHBoxLayout;
+    columns->setSpacing(4);
     auto* left_col = new QVBoxLayout;
     auto* right_col = new QVBoxLayout;
-    left_col->setSpacing(4);
-    right_col->setSpacing(4);
+    left_col->setSpacing(2);
+    right_col->setSpacing(2);
 
     left_col->addWidget(createConnectionGroup());
     left_col->addWidget(createMountGroup());
-    left_col->addWidget(createToolPositionGroup());
     left_col->addStretch();
 
     right_col->addWidget(createSamplingGroup());
@@ -94,10 +98,10 @@ public:
     // ── Compact status line ──
     status_label_ = new QLabel("就绪。需要手动确认。");
     status_label_->setWordWrap(true);
-    status_label_->setStyleSheet("QLabel { color: #333; font-weight: bold; padding: 2px; }");
+    status_label_->setStyleSheet("QLabel { color: #333; font-weight: bold; padding: 1px 2px; font-size: 11px; }");
     main_layout->addWidget(status_label_);
 
-    // ── Operation log ──
+    // ── Operation log (compact) ──
     main_layout->addWidget(createLogGroup());
 
     setLayout(main_layout);
@@ -401,74 +405,31 @@ private:
       "QWidget#header {"
       "  background: qlineargradient(x1:0, y1:0, x2:1, y2:0,"
       "    stop:0 #0a1f44, stop:0.5 #1a3a6e, stop:1 #0a1f44);"
-      "  border-radius: 6px;"
-      "  padding: 6px;"
+      "  border-radius: 4px;"
       "}"
     );
     header->setObjectName("header");
     auto* h_layout = new QHBoxLayout;
-    h_layout->setContentsMargins(8, 4, 8, 4);
+    h_layout->setContentsMargins(4, 2, 4, 2);
+    h_layout->setSpacing(6);
 
-    // ── Logo: CASC-inspired emblem ──
-    auto* logo_container = new QWidget;
-    logo_container->setFixedSize(72, 52);
-    logo_container->setStyleSheet(
-      "QWidget#logo {"
-      "  background: #0d2b5e;"
-      "  border: 2px solid #3a7bd5;"
-      "  border-radius: 8px;"
-      "}"
-    );
-    logo_container->setObjectName("logo");
-    auto* logo_layout = new QVBoxLayout;
-    logo_layout->setContentsMargins(4, 2, 4, 2);
-    logo_layout->setSpacing(0);
-
-    auto* star = new QLabel("🚀");
-    star->setAlignment(Qt::AlignCenter);
-    star->setStyleSheet("QLabel { font-size: 18px; border: none; background: transparent; }");
-
-    auto* logo_text = new QLabel("中国航天");
-    logo_text->setAlignment(Qt::AlignCenter);
-    logo_text->setStyleSheet(
-      "QLabel { font-size: 9px; font-weight: bold; color: #d4e4ff;"
-      "  border: none; background: transparent; }"
+    // ── Compact logo ──
+    auto* logo = new QLabel("🚀 中国航天");
+    logo->setStyleSheet(
+      "QLabel { font-size: 12px; font-weight: bold; color: #d4e4ff;"
+      "  background: #0d2b5e; border: 1px solid #3a7bd5;"
+      "  border-radius: 3px; padding: 2px 5px; }"
     );
 
-    logo_layout->addWidget(star);
-    logo_layout->addWidget(logo_text);
-    logo_container->setLayout(logo_layout);
-
-    // ── Title ──
-    auto* title_layout = new QVBoxLayout;
-    title_layout->setSpacing(0);
-
-    auto* title = new QLabel("上海卫星装备研究所");
+    // ── Title (single line) ──
+    auto* title = new QLabel("上海卫星装备研究所 · 机械臂负载测试系统");
     title->setStyleSheet(
-      "QLabel { font-size: 13px; font-weight: bold; color: #d4e4ff;"
+      "QLabel { font-size: 13px; font-weight: bold; color: #e8efff;"
       "  border: none; background: transparent; }"
     );
 
-    auto* subtitle = new QLabel("机械臂负载测试系统");
-    subtitle->setStyleSheet(
-      "QLabel { font-size: 11px; color: #8ab4f8;"
-      "  border: none; background: transparent; }"
-    );
-
-    title_layout->addWidget(title);
-    title_layout->addWidget(subtitle);
-
-    // ── Version badge ──
-    auto* version = new QLabel("v2.0");
-    version->setAlignment(Qt::AlignRight | Qt::AlignTop);
-    version->setStyleSheet(
-      "QLabel { font-size: 8px; color: #5a8fd0;"
-      "  border: none; background: transparent; padding: 2px; }"
-    );
-
-    h_layout->addWidget(logo_container);
-    h_layout->addLayout(title_layout, 1);
-    h_layout->addWidget(version);
+    h_layout->addWidget(logo);
+    h_layout->addWidget(title, 1);
     header->setLayout(h_layout);
     return header;
   }
@@ -477,7 +438,8 @@ private:
   {
     auto* group = new QGroupBox("连接");
     auto* form = new QFormLayout;
-    form->setHorizontalSpacing(6);
+    form->setHorizontalSpacing(4);
+    form->setVerticalSpacing(1);
     mode_combo_ = new QComboBox;
     mode_combo_->addItem("离线仿真");
     mode_combo_->addItem("真实传感器");
@@ -528,6 +490,8 @@ private:
     layout->addWidget(mount_yaw_, 1, 5);
     layout->addWidget(apply_mount_button_, 2, 0, 1, 3);
     layout->addWidget(check_tf_button_, 2, 3, 1, 3);
+    layout->setVerticalSpacing(1);
+    layout->setHorizontalSpacing(2);
     group->setLayout(layout);
     return group;
   }
@@ -536,7 +500,8 @@ private:
   {
     auto* group = new QGroupBox("滤波与稳定窗口");
     auto* form = new QFormLayout;
-    form->setHorizontalSpacing(6);
+    form->setHorizontalSpacing(4);
+    form->setVerticalSpacing(1);
     filter_enabled_check_ = new QCheckBox;
     filter_enabled_check_->setChecked(true);
     filter_window_spin_ = makeIntSpin(1, 200, 10);
@@ -559,8 +524,9 @@ private:
   QGroupBox* createSafetyGroup()
   {
     auto* group = new QGroupBox("安全检查清单");
-    auto* layout = new QVBoxLayout;
-    layout->setSpacing(2);
+    auto* layout = new QGridLayout;
+    layout->setSpacing(1);
+    layout->setVerticalSpacing(0);
     estop_check_ = new QCheckBox("急停按钮可达");
     teach_pendant_check_ = new QCheckBox("示教器由操作员持有");
     fence_check_ = new QCheckBox("安全区域已清空");
@@ -568,13 +534,13 @@ private:
     tool_fixed_check_ = new QCheckBox("工具和负载已固定");
     safety_label_ = new QLabel;
     safety_label_->setWordWrap(true);
-    safety_label_->setStyleSheet("QLabel { color: #555; font-style: italic; }");
-    layout->addWidget(estop_check_);
-    layout->addWidget(teach_pendant_check_);
-    layout->addWidget(fence_check_);
-    layout->addWidget(low_speed_check_);
-    layout->addWidget(tool_fixed_check_);
-    layout->addWidget(safety_label_);
+    safety_label_->setStyleSheet("QLabel { color: #555; font-style: italic; font-size: 10px; }");
+    layout->addWidget(estop_check_, 0, 0);
+    layout->addWidget(teach_pendant_check_, 0, 1);
+    layout->addWidget(fence_check_, 1, 0);
+    layout->addWidget(low_speed_check_, 1, 1);
+    layout->addWidget(tool_fixed_check_, 2, 0);
+    layout->addWidget(safety_label_, 3, 0, 1, 2);
     group->setLayout(layout);
     return group;
   }
@@ -582,58 +548,58 @@ private:
   QGroupBox* createAcquisitionGroup()
   {
     auto* group = new QGroupBox("负载辨识");
-    auto* layout = new QVBoxLayout;
-    auto* buttons = new QGridLayout;
-    auto* compute_layout = new QFormLayout;
+    auto* layout = new QHBoxLayout;
+    layout->setSpacing(4);
+
+    // Left: action buttons
+    auto* btn_layout = new QVBoxLayout;
+    btn_layout->setSpacing(2);
+    auto* row1 = new QHBoxLayout;
     tool_button_ = new QPushButton("记录 仅工具");
     total_button_ = new QPushButton("记录 工具加负载");
+    row1->addWidget(tool_button_);
+    row1->addWidget(total_button_);
+    auto* row2 = new QHBoxLayout;
     compute_button_ = new QPushButton("计算负载");
     clear_profiles_button_ = new QPushButton("清除配置");
+    row2->addWidget(compute_button_);
+    row2->addWidget(clear_profiles_button_);
+    btn_layout->addLayout(row1);
+    btn_layout->addLayout(row2);
+
+    // Right: min samples
+    auto* cfg_layout = new QFormLayout;
+    cfg_layout->setSpacing(1);
     min_samples_spin_ = makeIntSpin(3, 100, 6);
-    buttons->addWidget(tool_button_, 0, 0);
-    buttons->addWidget(total_button_, 0, 1);
-    compute_layout->addRow("每配置最小样本数", min_samples_spin_);
-    layout->addLayout(buttons);
-    layout->addLayout(compute_layout);
-    layout->addWidget(compute_button_);
-    layout->addWidget(clear_profiles_button_);
+    cfg_layout->addRow("最小样本数", min_samples_spin_);
+
+    layout->addLayout(btn_layout, 1);
+    layout->addLayout(cfg_layout);
     group->setLayout(layout);
     return group;
   }
 
-  QGroupBox* createToolPositionGroup()
+  QWidget* createToolPositionBar()
   {
-    auto* group = new QGroupBox("工具位置 (tool0 / base_link)");
-    auto* form = new QFormLayout;
-    form->setHorizontalSpacing(6);
+    auto* bar = new QWidget;
+    bar->setStyleSheet("QWidget#toolBar { background: #f0f4f8; border-radius: 3px; }");
+    bar->setObjectName("toolBar");
+    auto* layout = new QHBoxLayout;
+    layout->setContentsMargins(4, 1, 4, 1);
+    layout->setSpacing(8);
 
-    tool_pos_x_label_ = new QLabel("---");
-    tool_pos_y_label_ = new QLabel("---");
-    tool_pos_z_label_ = new QLabel("---");
-    tool_pos_roll_label_ = new QLabel("---");
-    tool_pos_pitch_label_ = new QLabel("---");
-    tool_pos_yaw_label_ = new QLabel("---");
-    tool_pos_status_label_ = new QLabel("等待 TF...");
-    tool_pos_status_label_->setWordWrap(true);
+    auto* label = new QLabel("工具位姿");
+    label->setStyleSheet("QLabel { font-weight: bold; font-size: 10px; color: #333; border: none; background: transparent; }");
+    tool_pos_bar_label_ = new QLabel("等待 TF...");
+    tool_pos_bar_label_->setStyleSheet("QLabel { font-family: monospace; font-size: 10px; color: #555; border: none; background: transparent; }");
+    tool_pos_bar_status_ = new QLabel("");
+    tool_pos_bar_status_->setStyleSheet("QLabel { font-size: 9px; border: none; background: transparent; }");
 
-    QFont mono_font("monospace");
-    mono_font.setStyleHint(QFont::Monospace);
-    tool_pos_x_label_->setFont(mono_font);
-    tool_pos_y_label_->setFont(mono_font);
-    tool_pos_z_label_->setFont(mono_font);
-    tool_pos_roll_label_->setFont(mono_font);
-    tool_pos_pitch_label_->setFont(mono_font);
-    tool_pos_yaw_label_->setFont(mono_font);
-
-    form->addRow("X 米", tool_pos_x_label_);
-    form->addRow("Y 米", tool_pos_y_label_);
-    form->addRow("Z 米", tool_pos_z_label_);
-    form->addRow("滚转 °", tool_pos_roll_label_);
-    form->addRow("俯仰 °", tool_pos_pitch_label_);
-    form->addRow("偏航 °", tool_pos_yaw_label_);
-    form->addRow(tool_pos_status_label_);
-    group->setLayout(form);
-    return group;
+    layout->addWidget(label);
+    layout->addWidget(tool_pos_bar_label_, 1);
+    layout->addWidget(tool_pos_bar_status_);
+    bar->setLayout(layout);
+    return bar;
   }
 
   void updateToolPosition()
@@ -648,32 +614,24 @@ private:
       double roll, pitch, yaw;
       transform.getBasis().getRPY(roll, pitch, yaw);
 
-      last_tool_x_ = x;
-      last_tool_y_ = y;
-      last_tool_z_ = z;
-      last_tool_roll_ = roll;
-      last_tool_pitch_ = pitch;
-      last_tool_yaw_ = yaw;
+      last_tool_x_ = x; last_tool_y_ = y; last_tool_z_ = z;
+      last_tool_roll_ = roll; last_tool_pitch_ = pitch; last_tool_yaw_ = yaw;
 
-      tool_pos_x_label_->setText(QString::number(x, 'f', 4));
-      tool_pos_y_label_->setText(QString::number(y, 'f', 4));
-      tool_pos_z_label_->setText(QString::number(z, 'f', 4));
-      tool_pos_roll_label_->setText(QString::number(roll * 180.0 / M_PI, 'f', 2));
-      tool_pos_pitch_label_->setText(QString::number(pitch * 180.0 / M_PI, 'f', 2));
-      tool_pos_yaw_label_->setText(QString::number(yaw * 180.0 / M_PI, 'f', 2));
-      tool_pos_status_label_->setText("✓ TF 已跟踪");
-      tool_pos_status_label_->setStyleSheet("QLabel { color: green; }");
+      tool_pos_bar_label_->setText(
+        QString("X=%1 Y=%2 Z=%3 | R=%4° P=%5° Y=%6°")
+          .arg(x, 0, 'f', 3).arg(y, 0, 'f', 3).arg(z, 0, 'f', 3)
+          .arg(roll * 180.0 / M_PI, 0, 'f', 1)
+          .arg(pitch * 180.0 / M_PI, 0, 'f', 1)
+          .arg(yaw * 180.0 / M_PI, 0, 'f', 1));
+      tool_pos_bar_status_->setText("✓ TF");
+      tool_pos_bar_status_->setStyleSheet("QLabel { color: green; font-size: 9px; border: none; background: transparent; }");
     }
     catch (const tf::TransformException& ex)
     {
-      tool_pos_x_label_->setText("---");
-      tool_pos_y_label_->setText("---");
-      tool_pos_z_label_->setText("---");
-      tool_pos_roll_label_->setText("---");
-      tool_pos_pitch_label_->setText("---");
-      tool_pos_yaw_label_->setText("---");
-      tool_pos_status_label_->setText(QString("✗ TF 缺失: ") + ex.what());
-      tool_pos_status_label_->setStyleSheet("QLabel { color: red; }");
+      (void)ex;
+      tool_pos_bar_label_->setText("TF 缺失");
+      tool_pos_bar_status_->setText("✗");
+      tool_pos_bar_status_->setStyleSheet("QLabel { color: red; font-size: 9px; border: none; background: transparent; }");
     }
   }
 
@@ -681,19 +639,30 @@ private:
   {
     auto* group = new QGroupBox("操作日志");
     auto* layout = new QVBoxLayout;
-    layout->setSpacing(2);
+    layout->setSpacing(1);
+    layout->setContentsMargins(2, 2, 2, 2);
+
+    auto* header = new QHBoxLayout;
+    auto* label = new QLabel("操作日志");
+    label->setStyleSheet("QLabel { font-weight: bold; font-size: 10px; border: none; }");
+    clear_log_button_ = new QPushButton("清除");
+    clear_log_button_->setMaximumHeight(20);
+    clear_log_button_->setStyleSheet("QPushButton { font-size: 9px; padding: 1px 6px; }");
+    header->addWidget(label);
+    header->addStretch();
+    header->addWidget(clear_log_button_);
 
     log_view_ = new QPlainTextEdit;
     log_view_->setReadOnly(true);
     log_view_->setMaximumBlockCount(500);
-    log_view_->setPlaceholderText("操作记录将显示在此处...");
-    log_view_->setStyleSheet("QPlainTextEdit { font-family: monospace; font-size: 11px; }");
+    log_view_->setMaximumHeight(120);
+    log_view_->setPlaceholderText("操作记录...");
+    log_view_->setStyleSheet("QPlainTextEdit { font-family: monospace; font-size: 10px; }");
 
-    clear_log_button_ = new QPushButton("清除日志");
-
+    layout->addLayout(header);
     layout->addWidget(log_view_);
-    layout->addWidget(clear_log_button_);
     group->setLayout(layout);
+    group->setMaximumHeight(160);
     return group;
   }
 
@@ -785,13 +754,8 @@ private:
   QSpinBox* min_samples_spin_{nullptr};
   QPlainTextEdit* log_view_{nullptr};
   QPushButton* clear_log_button_{nullptr};
-  QLabel* tool_pos_x_label_{nullptr};
-  QLabel* tool_pos_y_label_{nullptr};
-  QLabel* tool_pos_z_label_{nullptr};
-  QLabel* tool_pos_roll_label_{nullptr};
-  QLabel* tool_pos_pitch_label_{nullptr};
-  QLabel* tool_pos_yaw_label_{nullptr};
-  QLabel* tool_pos_status_label_{nullptr};
+  QLabel* tool_pos_bar_label_{nullptr};
+  QLabel* tool_pos_bar_status_{nullptr};
   double last_tool_x_{0.0};
   double last_tool_y_{0.0};
   double last_tool_z_{0.0};
