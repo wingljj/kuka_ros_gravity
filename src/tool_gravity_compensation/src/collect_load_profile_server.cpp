@@ -103,9 +103,9 @@ public:
                                                     &CollectLoadProfileServer::handleSetSamplingConfig, this);
     server_.start();
 
-    ROS_WARN_STREAM("collect_load_profile is in manual-confirmation mode. "
-                    "execute_motion requests are refused until the low-speed MoveIt execution workflow is enabled.");
-    ROS_INFO_STREAM("Configured wrench_topic=" << wrench_topic_
+    ROS_WARN_STREAM("collect_load_profile 处于手动确认模式。"
+                    "在启用低速 MoveIt 执行工作流之前，execute_motion 请求将被拒绝。");
+    ROS_INFO_STREAM("已配置 wrench_topic=" << wrench_topic_
                     << " sensor_frame=" << sensor_frame_
                     << " base_frame=" << base_frame_
                     << " move_group=" << move_group_
@@ -127,7 +127,7 @@ private:
     {
       result.success = false;
       result.result.success = false;
-      result.message = "Automatic MoveIt execution is disabled; use StepControl after manual confirmation";
+      result.message = "自动 MoveIt 执行已禁用；请手动确认后使用 StepControl";
       result.result.message = result.message;
       server_.setAborted(result, result.message);
       return;
@@ -136,7 +136,7 @@ private:
     {
       result.success = false;
       result.result.success = false;
-      result.message = "CollectLoadProfile refused: missing manual confirmation";
+      result.message = "CollectLoadProfile 被拒绝：缺少手动确认";
       result.result.message = result.message;
       server_.setAborted(result, result.message);
       return;
@@ -149,7 +149,7 @@ private:
       {
         result.success = false;
         result.result.success = false;
-        result.message = "CollectLoadProfile canceled before all requested samples were recorded";
+        result.message = "CollectLoadProfile 在记录所有请求样本前被取消";
         result.result.message = result.message;
         server_.setPreempted(result, result.message);
         return;
@@ -170,7 +170,7 @@ private:
       {
         result.success = false;
         result.result.success = false;
-        result.message = "StepControl failed";
+        result.message = "StepControl 失败";
         result.result.message = result.message;
         server_.setAborted(result, result.message);
         return;
@@ -195,7 +195,7 @@ private:
 
     result.success = true;
     result.result.success = true;
-    result.message = "Requested manual wrench samples recorded";
+    result.message = "已记录请求的手动力矩样本";
     result.result.message = result.message;
     server_.setSucceeded(result, result.message);
   }
@@ -207,7 +207,7 @@ private:
         !std::isfinite(msg->wrench.force.z) || !std::isfinite(msg->wrench.torque.x) ||
         !std::isfinite(msg->wrench.torque.y) || !std::isfinite(msg->wrench.torque.z))
     {
-      ROS_WARN_STREAM_THROTTLE(1.0, "Discarding wrench message with NaN/Inf values");
+      ROS_WARN_STREAM_THROTTLE(1.0, "丢弃含 NaN/Inf 值的力矩消息");
       return;
     }
     wrench_window_.push_back(*msg);
@@ -226,22 +226,22 @@ private:
 
     if (request.execute_motion)
     {
-      response.message = "StepControl refused: automatic motion execution is disabled";
+      response.message = "StepControl 被拒绝：自动运动执行已禁用";
       return true;
     }
     if (!request.sample_wrench)
     {
-      response.message = "StepControl refused: sample_wrench must be true";
+      response.message = "StepControl 被拒绝：sample_wrench 必须为 true";
       return true;
     }
     if (!validProfileType(request.profile_type))
     {
-      response.message = "StepControl refused: invalid profile_type";
+      response.message = "StepControl 被拒绝：无效的 profile_type";
       return true;
     }
     if (!request.manual_confirmed)
     {
-      response.message = "StepControl refused: missing manual confirmation";
+      response.message = "StepControl 被拒绝：缺少手动确认";
       return true;
     }
 
@@ -266,7 +266,7 @@ private:
     response.accepted = true;
     response.sample_recorded = true;
     response.samples_collected = samples_collected_;
-    response.message = "Stable wrench sample recorded";
+    response.message = "已记录稳定的力矩样本";
     return true;
   }
 
@@ -279,16 +279,16 @@ private:
 
     if (!request.compute)
     {
-      response.result.message = "ComputePayload refused: compute flag is false";
+      response.result.message = "ComputePayload 被拒绝：compute 标志为 false";
       response.message = response.result.message;
       return true;
     }
     if (tool_observations_.size() < request.min_samples || total_observations_.size() < request.min_samples)
     {
       std::ostringstream stream;
-      stream << "Need at least " << request.min_samples
-             << " samples for both TOOL_ONLY and TOOL_PLUS_PAYLOAD; have "
-             << tool_observations_.size() << " and " << total_observations_.size();
+      stream << "需要至少 " << request.min_samples
+             << " 个 TOOL_ONLY 和 TOOL_PLUS_PAYLOAD 样本；当前有 "
+             << tool_observations_.size() << " 和 " << total_observations_.size();
       response.result.message = stream.str();
       response.message = response.result.message;
       return true;
@@ -310,7 +310,7 @@ private:
       response.result.tool_mass = tool_profile.mass_kg;
       response.result.center_of_mass = response.result.com_sensor;
       response.result.residual_error = std::max(tool_profile.residual_error, total_profile.residual_error);
-      response.result.message = "Payload mass properties computed in sri_ft_sensor frame";
+      response.result.message = "负载质量属性已在 sri_ft_sensor 坐标系中计算";
       response.message = response.result.message;
     }
     catch (const std::exception& ex)
@@ -326,17 +326,17 @@ private:
     response.success = false;
     if (!request.apply)
     {
-      response.message = "SetSamplingConfig refused: apply flag is false";
+      response.message = "SetSamplingConfig 被拒绝：apply 标志为 false";
       return true;
     }
     if (request.filter_window_size < 1 || request.min_stable_samples < 1)
     {
-      response.message = "filter_window_size and min_stable_samples must be positive";
+      response.message = "filter_window_size 和 min_stable_samples 必须为正数";
       return true;
     }
     if (request.max_stddev_force <= 0.0 || request.max_stddev_torque <= 0.0 || request.sample_timeout <= 0.0)
     {
-      response.message = "stability thresholds and sample_timeout must be positive";
+      response.message = "稳定性阈值和 sample_timeout 必须为正数";
       return true;
     }
 
@@ -364,14 +364,14 @@ private:
     private_nh_.setParam("sampling/sample_timeout", sample_timeout_s_);
 
     std::ostringstream stream;
-    stream << "Updated sampling config: window=" << window_capacity_
+    stream << "已更新采样配置: window=" << window_capacity_
            << " min_stable_samples=" << min_stable_samples_
            << " max_stddev_force=" << max_stddev_force_
            << " max_stddev_torque=" << max_stddev_torque_
            << " sample_timeout=" << sample_timeout_s_;
     if (request.clear_profiles)
     {
-      stream << " and cleared collected profiles";
+      stream << " 并清除了已采集的配置";
     }
     response.success = true;
     response.message = stream.str();
@@ -382,12 +382,12 @@ private:
   {
     if (wrench_window_.size() < static_cast<std::size_t>(min_stable_samples_))
     {
-      error = "StepControl refused: not enough wrench samples in the stability window";
+      error = "StepControl 被拒绝：稳定窗口中力矩样本不足";
       return false;
     }
     if ((ros::Time::now() - wrench_window_.back().header.stamp).toSec() > sample_timeout_s_)
     {
-      error = "StepControl refused: latest wrench sample is stale";
+      error = "StepControl 被拒绝：最新力矩样本已过期";
       return false;
     }
 
@@ -396,7 +396,7 @@ private:
     if (force_stddev > max_stddev_force_ || torque_stddev > max_stddev_torque_)
     {
       std::ostringstream stream;
-      stream << "StepControl refused: unstable wrench window force_stddev="
+      stream << "StepControl 被拒绝：力矩窗口不稳定 force_stddev="
              << force_stddev << " torque_stddev=" << torque_stddev;
       error = stream.str();
       return false;
@@ -427,7 +427,7 @@ private:
     }
     catch (const tf::TransformException& ex)
     {
-      error = std::string("StepControl refused: missing TF ") + base_frame_ + " -> " + sensor_frame_ + ": " + ex.what();
+      error = std::string("StepControl 被拒绝：缺少 TF ") + base_frame_ + " -> " + sensor_frame_ + ": " + ex.what();
       return false;
     }
 
