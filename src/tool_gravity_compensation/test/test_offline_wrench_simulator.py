@@ -5,6 +5,13 @@ import unittest
 
 
 def load_simulator_module():
+    """Load offline_wrench_simulator module for testing.
+
+    Safety note: exec_module is used with a hardcoded path derived from
+    this test file's own location — no external input or user-controlled
+    path is involved. This is a standard Python importlib pattern for
+    loading modules outside the normal package hierarchy.
+    """
     package_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     module_path = os.path.join(package_dir, "scripts", "offline_wrench_simulator.py")
     spec = importlib.util.spec_from_file_location("offline_wrench_simulator", module_path)

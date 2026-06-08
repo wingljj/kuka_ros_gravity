@@ -9,6 +9,7 @@
 #include "sriforcesensor/SetFilterConfig.h"
 #include "sriforcesensor/wrench_filter.h"
 #include <Eigen/Dense>
+#include <cmath>
 #include <exception>
 #include <array>
 #include <string>
@@ -242,13 +243,33 @@ int main(int argc, char **argv)
   ros::Rate loop_rate(l_rate);
   while (ros::ok())
   {
-    // geometry_msgs::Twist 
+    // geometry_msgs::Twist
     if (!tcp.readrecieveBuffer_IEEEfloat32(m_dResultChValue))
     {
       ROS_WARN_THROTTLE(1.0, "Skipping SRI publish because no complete valid engineering frame was received.");
       ros::spinOnce();
       loop_rate.sleep();
       continue;
+    }
+
+    // NaN/Inf guard: discard frames with non-finite sensor readings
+    {
+      bool non_finite = false;
+      for (int i = 0; i < M812X_CHN_NUMBER; ++i)
+      {
+        if (!std::isfinite(m_dResultChValue(0, i)))
+        {
+          non_finite = true;
+          break;
+        }
+      }
+      if (non_finite)
+      {
+        ROS_WARN_THROTTLE(1.0, "Skipping SRI publish because sensor frame contains NaN or Inf.");
+        ros::spinOnce();
+        loop_rate.sleep();
+        continue;
+      }
     }
 
     for (int i = 0; i < M812X_CHN_NUMBER; ++i)

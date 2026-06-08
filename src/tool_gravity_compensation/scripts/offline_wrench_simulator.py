@@ -7,6 +7,10 @@ from geometry_msgs.msg import WrenchStamped
 
 
 STANDARD_GRAVITY = 9.80665
+MAX_MASS_KG = 200.0
+MAX_COM_DISTANCE_M = 2.0
+MAX_FORCE_N = 10000.0
+MAX_TORQUE_NM = 1000.0
 
 
 def cross(a, b):
@@ -73,6 +77,17 @@ class OfflineWrenchSimulator:
         self.fallback_xyz = get_vector_param("~fallback_base_to_sensor_xyz", [0.0, 0.0, 0.0])
         self.fallback_rpy = get_vector_param("~fallback_base_to_sensor_rpy", [0.0, 0.0, 0.0])
 
+        # Validate physical parameter bounds
+        if self.mass_kg <= 0.0 or self.mass_kg > MAX_MASS_KG:
+            raise ValueError("mass_kg must be positive and <= {} kg, got {}".format(MAX_MASS_KG, self.mass_kg))
+        com_dist = math.sqrt(sum(v * v for v in self.com_sensor_m))
+        if com_dist > MAX_COM_DISTANCE_M:
+            raise ValueError("com_sensor_m distance {} m exceeds max {} m".format(com_dist, MAX_COM_DISTANCE_M))
+        if self.noise_force < 0.0 or self.noise_torque < 0.0:
+            raise ValueError("noise_force and noise_torque must be non-negative")
+        if self.publish_rate <= 0.0 or self.publish_rate > 1000.0:
+            raise ValueError("publish_rate must be positive and <= 1000 Hz")
+
         self.fallback_quaternion = tf.transformations.quaternion_from_euler(
             self.fallback_rpy[0], self.fallback_rpy[1], self.fallback_rpy[2])
         self.fallback_base_r_sensor = rotation_matrix_from_quaternion(self.fallback_quaternion)
@@ -123,6 +138,22 @@ class OfflineWrenchSimulator:
             msg.wrench.torque.x = torque[0] + self.noise_torque * math.sin(now.to_sec() * 2.9)
             msg.wrench.torque.y = torque[1] + self.noise_torque * math.sin(now.to_sec() * 2.1)
             msg.wrench.torque.z = torque[2] + self.noise_torque * math.sin(now.to_sec() * 1.3)
+
+            # NaN/Inf guard: skip publishing non-finite wrench values
+            wrench_vals = [
+                msg.wrench.force.x, msg.wrench.force.y, msg.wrench.force.z,
+                msg.wrench.torque.x, msg.wrench.torque.y, msg.wrench.torque.z,
+            ]
+            if any(not math.isfinite(v) for v in wrench_vals):
+                rospy.logwarn_throttle(2.0, "Skipping simulated wrench with NaN/Inf values")
+                rate.sleep()
+                continue
+            if any(abs(v) > MAX_FORCE_N for v in wrench_vals[:3]) or \
+               any(abs(v) > MAX_TORQUE_NM for v in wrench_vals[3:]):
+                rospy.logwarn_throttle(2.0, "Skipping simulated wrench exceeding sensor range")
+                rate.sleep()
+                continue
+
             self.pub.publish(msg)
             rate.sleep()
 

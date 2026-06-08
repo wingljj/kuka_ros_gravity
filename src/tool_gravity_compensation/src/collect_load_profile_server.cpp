@@ -202,6 +202,14 @@ private:
 
   void handleWrench(const geometry_msgs::WrenchStampedConstPtr& msg)
   {
+    // NaN/Inf guard: discard wrench messages with non-finite values
+    if (!std::isfinite(msg->wrench.force.x) || !std::isfinite(msg->wrench.force.y) ||
+        !std::isfinite(msg->wrench.force.z) || !std::isfinite(msg->wrench.torque.x) ||
+        !std::isfinite(msg->wrench.torque.y) || !std::isfinite(msg->wrench.torque.z))
+    {
+      ROS_WARN_STREAM_THROTTLE(1.0, "Discarding wrench message with NaN/Inf values");
+      return;
+    }
     wrench_window_.push_back(*msg);
     while (wrench_window_.size() > static_cast<std::size_t>(window_capacity_))
     {

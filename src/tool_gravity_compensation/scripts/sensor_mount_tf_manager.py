@@ -1,8 +1,12 @@
 #!/usr/bin/env python3
+import math
 import rospy
 import tf
 from geometry_msgs.msg import TransformStamped
 from tool_gravity_compensation.srv import SetSensorMount, SetSensorMountResponse
+
+MAX_TRANSLATION_M = 5.0
+MAX_ROTATION_RAD = 2.0 * math.pi
 
 
 def make_transform(parent_frame, child_frame, xyz, rpy, stamp=None):
@@ -38,6 +42,17 @@ class SensorMountTfManager:
         self.xyz = vector_param("~xyz", [0.0, 0.0, 0.0])
         self.rpy = vector_param("~rpy", [0.0, 0.0, 0.0])
         self.publish_rate = float(rospy.get_param("~publish_rate", 50.0))
+
+        # Validate bounds
+        for i, val in enumerate(self.xyz):
+            if not math.isfinite(val) or abs(val) > MAX_TRANSLATION_M:
+                raise ValueError("xyz[{}]={} exceeds allowed range +/-{} m".format(i, val, MAX_TRANSLATION_M))
+        for i, val in enumerate(self.rpy):
+            if not math.isfinite(val) or abs(val) > MAX_ROTATION_RAD:
+                raise ValueError("rpy[{}]={} exceeds allowed range +/-{} rad".format(i, val, MAX_ROTATION_RAD))
+        if self.publish_rate <= 0.0 or self.publish_rate > 200.0:
+            raise ValueError("publish_rate must be positive and <= 200 Hz")
+
         self.broadcaster = tf.TransformBroadcaster()
         self.transform = make_transform(self.parent_frame, self.child_frame, self.xyz, self.rpy)
         self.service = rospy.Service("set_sensor_mount", SetSensorMount, self.handle_set_sensor_mount)

@@ -35,6 +35,20 @@ PayloadMassProperties computePayloadFromProfiles(const LoadInertialProfile& tool
            << payload_mass << " kg < " << minimum_payload_mass_kg << " kg";
     throw std::invalid_argument(stream.str());
   }
+  if (payload_mass > kMaximumPayloadMassKg)
+  {
+    std::ostringstream stream;
+    stream << "payload mass exceeds maximum allowed: "
+           << payload_mass << " kg > " << kMaximumPayloadMassKg << " kg";
+    throw std::invalid_argument(stream.str());
+  }
+  if (tool_plus_payload.mass_kg > kMaximumPayloadMassKg)
+  {
+    std::ostringstream stream;
+    stream << "total mass (tool+payload) exceeds maximum allowed: "
+           << tool_plus_payload.mass_kg << " kg > " << kMaximumPayloadMassKg << " kg";
+    throw std::invalid_argument(stream.str());
+  }
 
   PayloadMassProperties result;
   result.mass_kg = payload_mass;
@@ -45,6 +59,22 @@ PayloadMassProperties computePayloadFromProfiles(const LoadInertialProfile& tool
     const double tool_moment = tool_only.mass_kg * tool_only.com_sensor_m[i];
     result.com_sensor_m[i] = (total_moment - tool_moment) / payload_mass;
   }
+
+  // COM distance bounds check
+  double com_distance_sq = 0.0;
+  for (std::size_t i = 0; i < result.com_sensor_m.size(); ++i)
+  {
+    com_distance_sq += result.com_sensor_m[i] * result.com_sensor_m[i];
+  }
+  const double com_distance = std::sqrt(com_distance_sq);
+  if (!std::isfinite(com_distance) || com_distance > kMaximumComDistanceM)
+  {
+    std::ostringstream stream;
+    stream << "computed payload center-of-mass distance exceeds maximum allowed: "
+           << com_distance << " m > " << kMaximumComDistanceM << " m";
+    throw std::invalid_argument(stream.str());
+  }
+
   return result;
 }
 
@@ -129,6 +159,31 @@ LoadInertialProfile estimateLoadProfileFromWrenches(const std::vector<WrenchObse
   if (maximum_force_residual_n <= 0.0 || maximum_torque_residual_nm <= 0.0)
   {
     throw std::invalid_argument("residual thresholds must be positive");
+  }
+
+  // NaN/Inf and magnitude guard on input observations
+  for (std::size_t i = 0; i < observations.size(); ++i)
+  {
+    const WrenchObservation& obs = observations[i];
+    for (std::size_t axis = 0; axis < 3; ++axis)
+    {
+      if (!std::isfinite(obs.force[axis]) || !std::isfinite(obs.torque[axis]))
+      {
+        throw std::invalid_argument("observation contains NaN or Inf force/torque values");
+      }
+      if (std::abs(obs.force[axis]) > kMaximumForceMagnitudeN ||
+          std::abs(obs.torque[axis]) > kMaximumTorqueMagnitudeNm)
+      {
+        throw std::invalid_argument("observation force/torque exceeds sensor range");
+      }
+    }
+    for (std::size_t j = 0; j < 9; ++j)
+    {
+      if (!std::isfinite(obs.base_R_sensor[j]))
+      {
+        throw std::invalid_argument("observation contains NaN or Inf in rotation matrix");
+      }
+    }
   }
 
   Eigen::MatrixXd force_a(static_cast<Eigen::Index>(observations.size() * 3), 4);

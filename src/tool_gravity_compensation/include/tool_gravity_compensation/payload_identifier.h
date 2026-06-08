@@ -10,6 +10,10 @@ namespace tool_gravity_compensation
 
 constexpr double kStandardGravity = 9.80665;
 constexpr double kMinimumPayloadMassKg = 0.05;
+constexpr double kMaximumPayloadMassKg = 200.0;
+constexpr double kMaximumComDistanceM = 2.0;
+constexpr double kMaximumForceMagnitudeN = 10000.0;
+constexpr double kMaximumTorqueMagnitudeNm = 1000.0;
 constexpr double kMaximumLeastSquaresConditionNumber = 1000.0;
 constexpr double kMaximumForceResidualN = 5.0;
 constexpr double kMaximumTorqueResidualNm = 0.5;
