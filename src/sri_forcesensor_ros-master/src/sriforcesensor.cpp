@@ -33,20 +33,20 @@ bool ConfigSystem(void)
   tcp.Send("AT+SGDM=?\r\n");
   string rec = tcp.read();
   ROS_INFO("##############");
-  ROS_INFO("Important! Make sure that the response [rec_SGDM] below is: '(A01,A02,A03,A04,A05,A06);E;1;(WMA:1)'");
-  ROS_INFO("1. SGDM should include 'E' before WMA (Engineering output), not 'C' (ADC output).");
-  ROS_INFO("2. WMA means filter parameters, 1 indicate raw newest data without filtering.");
+  ROS_INFO("重要！请确保下方 [rec_SGDM] 响应为: '(A01,A02,A03,A04,A05,A06);E;1;(WMA:1)'");
+  ROS_INFO("1. SGDM 应在 WMA 之前包含 'E'（工程输出），而非 'C'（ADC输出）。");
+  ROS_INFO("2. WMA 表示滤波参数，1 表示原始最新数据（无滤波）。");
   if( rec != "" ) {
-    ROS_WARN("[rec_SGDM] Response: %s", rec.c_str()); 
+    ROS_WARN("[rec_SGDM] 响应: %s", rec.c_str());
   }
   else {
-    std::cout << "Server Not Response: Exit Now!"  << endl;
+    std::cout << "服务器无响应：立即退出！"  << endl;
     return false;
   }
   if (rec.find("(A01,A02,A03,A04,A05,A06);E;") == std::string::npos)
   {
-    ROS_ERROR("SRI sensor output format is not the expected '(A01,A02,A03,A04,A05,A06);E;'. Refusing to publish wrench data.");
-    ROS_ERROR("Configure the sensor to '(A01,A02,A03,A04,A05,A06);E;1;(WMA:1)' before running payload identification.");
+    ROS_ERROR("SRI 传感器输出格式不符合预期的 '(A01,A02,A03,A04,A05,A06);E;'。拒绝发布力矩数据。");
+    ROS_ERROR("请在运行负载辨识前将传感器配置为 '(A01,A02,A03,A04,A05,A06);E;1;(WMA:1)'。");
     return false;
   }
   // ### If you want to solve the abot problem, uncomment the following lines to set once ### 
@@ -59,11 +59,11 @@ bool ConfigSystem(void)
   if( rec_hz != "" )
   {
     ROS_INFO("##############");
-    ROS_INFO("Make Sure the Publish Rate and Force Rate is set as the same.");
-    ROS_WARN("Force Sensing Rate is set to: %s", rec_hz.c_str());
+    ROS_INFO("请确保发布频率与力采样频率设置相同。");
+    ROS_WARN("力传感频率设置为: %s", rec_hz.c_str());
   }
   else {
-    std::cout << "Server Not Response: Exit Now!" << endl;
+    std::cout << "服务器无响应：立即退出！" << endl;
     return false;
   }
   // ### If you want to solve the abot problem, uncomment the following lines to set once ### 
@@ -85,7 +85,7 @@ bool handleSetFilterConfig(sriforcesensor::SetFilterConfig::Request& request,
   response.success = false;
   if (!request.apply)
   {
-    response.message = "SetFilterConfig refused: apply flag is false";
+    response.message = "SetFilterConfig 被拒绝：apply 标志为 false";
     return true;
   }
 
@@ -108,7 +108,7 @@ bool handleSetFilterConfig(sriforcesensor::SetFilterConfig::Request& request,
     private_nh.setParam("filter/max_stddev_torque", max_stddev_torque);
 
     std::ostringstream stream;
-    stream << "Updated SRI ROS filter: enabled=" << (filter_enabled ? "true" : "false")
+    stream << "已更新 SRI ROS 滤波: enabled=" << (filter_enabled ? "true" : "false")
            << " window=" << config.window_size
            << " max_stddev_force=" << max_stddev_force
            << " max_stddev_torque=" << max_stddev_torque;
@@ -143,16 +143,16 @@ int main(int argc, char **argv)
   signal(SIGINT, sig_exit);
   if(tcp.setup(ipAddress, 4008)==true)
   {
-    ROS_INFO("Force sensor has been connected! \n ");
+    ROS_INFO("力传感器已连接！\n ");
   }else{
-    ROS_ERROR("Force sensor connection failed!");
+    ROS_ERROR("力传感器连接失败！");
     return -1;
   }
   // initialize the setting of the force sensor
   if (ConfigSystem() == false) return -1;
 
   // get real time force sensor data
-  ROS_INFO("Start to Publish Rate: %f Hz", l_rate);
+  ROS_INFO("开始发布，频率: %f Hz", l_rate);
   tcp.Send("AT+GSD\r\n");
 
   geometry_msgs::Twist Forcevalue;
@@ -187,7 +187,7 @@ int main(int argc, char **argv)
   }
   catch (const std::exception& ex)
   {
-    ROS_WARN("Invalid ROS-side filter config (%s). Falling back to enabled=true window=10 force_stddev=2.0 torque_stddev=0.2.",
+    ROS_WARN("无效的 ROS 侧滤波配置 (%s)。回退到 enabled=true window=10 force_stddev=2.0 torque_stddev=0.2。",
              ex.what());
     filter_config = sriforcesensor::validateWrenchFilterConfig(true, 10, 2.0, 0.2);
   }
@@ -205,20 +205,20 @@ int main(int argc, char **argv)
     {
       if (!(stream >> sign_correction[i]) || (sign_correction[i] != 1.0 && sign_correction[i] != -1.0))
       {
-        ROS_ERROR("Invalid sign_correction parameter. Use six values, each 1 or -1.");
+        ROS_ERROR("无效的 sign_correction 参数。请使用六个值，每个为 1 或 -1。");
         return -1;
       }
     }
     double trailing = 0.0;
     if (stream >> trailing)
     {
-      ROS_ERROR("Invalid sign_correction parameter. Use exactly six values, each 1 or -1.");
+      ROS_ERROR("无效的 sign_correction 参数。请使用恰好六个值，每个为 1 或 -1。");
       return -1;
     }
   }
   if (torque_scale <= 0.0)
   {
-    ROS_ERROR("Invalid torque_scale parameter. Use 1.0 for Nm or 0.001 for Nmm engineering output.");
+    ROS_ERROR("无效的 torque_scale 参数。Nm 使用 1.0，Nmm 工程输出使用 0.001。");
     return -1;
   }
 
@@ -231,11 +231,11 @@ int main(int argc, char **argv)
       boost::bind(handleSetFilterConfig, _1, _2, boost::ref(private_nh), boost::ref(filter),
                   boost::ref(filter_enabled), boost::ref(max_stddev_force), boost::ref(max_stddev_torque)));
 
-  ROS_INFO("Publishing SRI raw wrench on %s and filtered wrench on %s in frame %s",
+  ROS_INFO("发布 SRI 原始力矩到 %s，滤波力矩到 %s，坐标系 %s",
            raw_wrench_topic.c_str(), filtered_wrench_topic.c_str(), frame_id.c_str());
-  ROS_INFO("ROS-side filter: enabled=%s window=%d max_stddev_force=%f max_stddev_torque=%f",
+  ROS_INFO("ROS 侧滤波: enabled=%s window=%d max_stddev_force=%f max_stddev_torque=%f",
            filter_enabled ? "true" : "false", filter_window_size, max_stddev_force, max_stddev_torque);
-  ROS_INFO("SRI channel mapping A01..A06 -> Fx,Fy,Fz,Tx,Ty,Tz; torque_scale=%f sign_correction=[%f %f %f %f %f %f]",
+  ROS_INFO("SRI 通道映射 A01..A06 -> Fx,Fy,Fz,Tx,Ty,Tz; torque_scale=%f sign_correction=[%f %f %f %f %f %f]",
            torque_scale,
            sign_correction[0], sign_correction[1], sign_correction[2],
            sign_correction[3], sign_correction[4], sign_correction[5]);
@@ -246,7 +246,7 @@ int main(int argc, char **argv)
     // geometry_msgs::Twist
     if (!tcp.readrecieveBuffer_IEEEfloat32(m_dResultChValue))
     {
-      ROS_WARN_THROTTLE(1.0, "Skipping SRI publish because no complete valid engineering frame was received.");
+      ROS_WARN_THROTTLE(1.0, "跳过 SRI 发布：未收到完整有效的工程帧。");
       ros::spinOnce();
       loop_rate.sleep();
       continue;
@@ -265,7 +265,7 @@ int main(int argc, char **argv)
       }
       if (non_finite)
       {
-        ROS_WARN_THROTTLE(1.0, "Skipping SRI publish because sensor frame contains NaN or Inf.");
+        ROS_WARN_THROTTLE(1.0, "跳过 SRI 发布：传感器帧包含 NaN 或 Inf。");
         ros::spinOnce();
         loop_rate.sleep();
         continue;
