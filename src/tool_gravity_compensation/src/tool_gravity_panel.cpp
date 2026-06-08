@@ -148,9 +148,9 @@ private Q_SLOTS:
     srv.request.x = mount_x_->value();
     srv.request.y = mount_y_->value();
     srv.request.z = mount_z_->value();
-    srv.request.roll = mount_roll_->value();
-    srv.request.pitch = mount_pitch_->value();
-    srv.request.yaw = mount_yaw_->value();
+    srv.request.roll = mount_roll_->value() * M_PI / 180.0;
+    srv.request.pitch = mount_pitch_->value() * M_PI / 180.0;
+    srv.request.yaw = mount_yaw_->value() * M_PI / 180.0;
     srv.request.save_to_params = true;
 
     if (!sensor_mount_client_.waitForExistence(ros::Duration(0.2)) || !sensor_mount_client_.call(srv))
@@ -471,9 +471,9 @@ private:
     mount_x_ = makeDoubleSpin(-5.0, 5.0, 0.0);
     mount_y_ = makeDoubleSpin(-5.0, 5.0, 0.0);
     mount_z_ = makeDoubleSpin(-5.0, 5.0, 0.0);
-    mount_roll_ = makeDoubleSpin(-3.1416, 3.1416, 0.0);
-    mount_pitch_ = makeDoubleSpin(-3.1416, 3.1416, 0.0);
-    mount_yaw_ = makeDoubleSpin(-3.1416, 3.1416, 0.0);
+    mount_roll_ = makeDoubleSpin(-180.0, 180.0, 0.0, 1);
+    mount_pitch_ = makeDoubleSpin(-180.0, 180.0, 0.0, 1);
+    mount_yaw_ = makeDoubleSpin(-180.0, 180.0, 0.0, 1);
     apply_mount_button_ = new QPushButton("应用安装");
     check_tf_button_ = new QPushButton("检查TF");
     layout->addWidget(new QLabel("x 米"), 0, 0);
@@ -482,11 +482,11 @@ private:
     layout->addWidget(mount_y_, 0, 3);
     layout->addWidget(new QLabel("z 米"), 0, 4);
     layout->addWidget(mount_z_, 0, 5);
-    layout->addWidget(new QLabel("滚转 rad"), 1, 0);
+    layout->addWidget(new QLabel("滚转 °"), 1, 0);
     layout->addWidget(mount_roll_, 1, 1);
-    layout->addWidget(new QLabel("俯仰 rad"), 1, 2);
+    layout->addWidget(new QLabel("俯仰 °"), 1, 2);
     layout->addWidget(mount_pitch_, 1, 3);
-    layout->addWidget(new QLabel("偏航 rad"), 1, 4);
+    layout->addWidget(new QLabel("偏航 °"), 1, 4);
     layout->addWidget(mount_yaw_, 1, 5);
     layout->addWidget(apply_mount_button_, 2, 0, 1, 3);
     layout->addWidget(check_tf_button_, 2, 3, 1, 3);
