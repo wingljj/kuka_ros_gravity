@@ -101,7 +101,7 @@ class OfflineWrenchSimulator:
             return rotation_matrix_from_quaternion(quaternion)
         except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException) as exc:
             if self.broadcast_fallback_tf:
-                rospy.logwarn_throttle(2.0, "Using fallback base->sensor TF: %s", exc)
+                rospy.logwarn_throttle(2.0, "使用回退 base->sensor TF: %s", exc)
                 self.broadcaster.sendTransform(
                     self.fallback_xyz,
                     self.fallback_quaternion,
@@ -110,7 +110,7 @@ class OfflineWrenchSimulator:
                     self.base_frame,
                 )
                 return self.fallback_base_r_sensor
-            rospy.logwarn_throttle(2.0, "Waiting for TF %s -> %s: %s",
+            rospy.logwarn_throttle(2.0, "等待 TF %s -> %s: %s",
                                    self.base_frame, self.sensor_frame, exc)
             return None
 
@@ -145,12 +145,12 @@ class OfflineWrenchSimulator:
                 msg.wrench.torque.x, msg.wrench.torque.y, msg.wrench.torque.z,
             ]
             if any(not math.isfinite(v) for v in wrench_vals):
-                rospy.logwarn_throttle(2.0, "Skipping simulated wrench with NaN/Inf values")
+                rospy.logwarn_throttle(2.0, "跳过含 NaN/Inf 值的仿真力矩")
                 rate.sleep()
                 continue
             if any(abs(v) > MAX_FORCE_N for v in wrench_vals[:3]) or \
                any(abs(v) > MAX_TORQUE_NM for v in wrench_vals[3:]):
-                rospy.logwarn_throttle(2.0, "Skipping simulated wrench exceeding sensor range")
+                rospy.logwarn_throttle(2.0, "跳过超出传感器量程的仿真力矩")
                 rate.sleep()
                 continue
 

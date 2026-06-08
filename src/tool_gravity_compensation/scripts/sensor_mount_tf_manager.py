@@ -63,7 +63,7 @@ class SensorMountTfManager:
         child = request.child_frame or self.child_frame
         if not parent or not child:
             response.success = False
-            response.message = "parent_frame and child_frame are required"
+            response.message = "parent_frame 和 child_frame 为必填项"
             response.transform = self.transform
             return response
 
@@ -83,7 +83,7 @@ class SensorMountTfManager:
             rospy.set_param("/tool_gravity_compensation/sensor_mount/rpy", self.rpy)
 
         response.success = True
-        response.message = "Updated sensor mount transform {} -> {}".format(self.parent_frame, self.child_frame)
+        response.message = "已更新传感器安装变换 {} -> {}".format(self.parent_frame, self.child_frame)
         response.transform = self.transform
         return response
 

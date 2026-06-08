@@ -16,36 +16,36 @@ PayloadMassProperties computePayloadFromProfiles(const LoadInertialProfile& tool
 {
   if (tool_only.mass_kg < 0.0 || tool_plus_payload.mass_kg < 0.0)
   {
-    throw std::invalid_argument("profile mass must be non-negative");
+    throw std::invalid_argument("profile 质量必须为非负数");
   }
   if (gravity <= 0.0)
   {
-    throw std::invalid_argument("gravity must be positive");
+    throw std::invalid_argument("重力值必须为正数");
   }
   if (minimum_payload_mass_kg <= 0.0)
   {
-    throw std::invalid_argument("minimum_payload_mass_kg must be positive");
+    throw std::invalid_argument("minimum_payload_mass_kg 必须为正数");
   }
 
   const double payload_mass = tool_plus_payload.mass_kg - tool_only.mass_kg;
   if (payload_mass < minimum_payload_mass_kg)
   {
     std::ostringstream stream;
-    stream << "payload mass after tare subtraction is below reliable threshold: "
+    stream << "皮重扣除后的负载质量低于可靠阈值: "
            << payload_mass << " kg < " << minimum_payload_mass_kg << " kg";
     throw std::invalid_argument(stream.str());
   }
   if (payload_mass > kMaximumPayloadMassKg)
   {
     std::ostringstream stream;
-    stream << "payload mass exceeds maximum allowed: "
+    stream << "负载质量超出最大允许值: "
            << payload_mass << " kg > " << kMaximumPayloadMassKg << " kg";
     throw std::invalid_argument(stream.str());
   }
   if (tool_plus_payload.mass_kg > kMaximumPayloadMassKg)
   {
     std::ostringstream stream;
-    stream << "total mass (tool+payload) exceeds maximum allowed: "
+    stream << "总质量（工具+负载）超出最大允许值: "
            << tool_plus_payload.mass_kg << " kg > " << kMaximumPayloadMassKg << " kg";
     throw std::invalid_argument(stream.str());
   }
@@ -70,7 +70,7 @@ PayloadMassProperties computePayloadFromProfiles(const LoadInertialProfile& tool
   if (!std::isfinite(com_distance) || com_distance > kMaximumComDistanceM)
   {
     std::ostringstream stream;
-    stream << "computed payload center-of-mass distance exceeds maximum allowed: "
+    stream << "计算得到的负载质心距离超出最大允许值: "
            << com_distance << " m > " << kMaximumComDistanceM << " m";
     throw std::invalid_argument(stream.str());
   }
@@ -107,7 +107,7 @@ void validateLeastSquaresQuality(const char* label,
   const Eigen::JacobiSVD<Eigen::MatrixXd> svd(a);
   if (svd.rank() < expected_rank)
   {
-    throw std::invalid_argument(std::string(label) + " observations are underconstrained");
+    throw std::invalid_argument(std::string(label) + " 观测数据欠约束");
   }
 
   const Eigen::VectorXd singular_values = svd.singularValues();
@@ -115,14 +115,14 @@ void validateLeastSquaresQuality(const char* label,
   const double kRankTolerance = 1e-9;
   if (smallest <= kRankTolerance)
   {
-    throw std::invalid_argument(std::string(label) + " observations are ill-conditioned");
+    throw std::invalid_argument(std::string(label) + " 观测数据病态");
   }
 
   const double condition = conditionNumber(a);
   if (condition > maximum_condition_number)
   {
     std::ostringstream stream;
-    stream << label << " observations are ill-conditioned: condition_number="
+    stream << label << " 观测数据病态: condition_number="
            << condition << " > " << maximum_condition_number;
     throw std::invalid_argument(stream.str());
   }
@@ -132,7 +132,7 @@ void validateLeastSquaresQuality(const char* label,
   if (residual_rms > maximum_residual)
   {
     std::ostringstream stream;
-    stream << label << " residual is too high: rms=" << residual_rms
+    stream << label << " 残差过高: rms=" << residual_rms
            << " > " << maximum_residual;
     throw std::invalid_argument(stream.str());
   }
@@ -146,19 +146,19 @@ LoadInertialProfile estimateLoadProfileFromWrenches(const std::vector<WrenchObse
 {
   if (observations.size() < 3)
   {
-    throw std::invalid_argument("at least three static wrench observations are required");
+    throw std::invalid_argument("至少需要三个静态力矩观测值");
   }
   if (gravity <= 0.0)
   {
-    throw std::invalid_argument("gravity must be positive");
+    throw std::invalid_argument("重力值必须为正数");
   }
   if (maximum_condition_number <= 1.0)
   {
-    throw std::invalid_argument("maximum_condition_number must be greater than one");
+    throw std::invalid_argument("maximum_condition_number 必须大于 1");
   }
   if (maximum_force_residual_n <= 0.0 || maximum_torque_residual_nm <= 0.0)
   {
-    throw std::invalid_argument("residual thresholds must be positive");
+    throw std::invalid_argument("残差阈值必须为正数");
   }
 
   // NaN/Inf and magnitude guard on input observations
@@ -169,19 +169,19 @@ LoadInertialProfile estimateLoadProfileFromWrenches(const std::vector<WrenchObse
     {
       if (!std::isfinite(obs.force[axis]) || !std::isfinite(obs.torque[axis]))
       {
-        throw std::invalid_argument("observation contains NaN or Inf force/torque values");
+        throw std::invalid_argument("观测值包含 NaN 或 Inf 力/力矩数据");
       }
       if (std::abs(obs.force[axis]) > kMaximumForceMagnitudeN ||
           std::abs(obs.torque[axis]) > kMaximumTorqueMagnitudeNm)
       {
-        throw std::invalid_argument("observation force/torque exceeds sensor range");
+        throw std::invalid_argument("观测值力/力矩超出传感器量程");
       }
     }
     for (std::size_t j = 0; j < 9; ++j)
     {
       if (!std::isfinite(obs.base_R_sensor[j]))
       {
-        throw std::invalid_argument("observation contains NaN or Inf in rotation matrix");
+        throw std::invalid_argument("观测值旋转矩阵包含 NaN 或 Inf");
       }
     }
   }
@@ -219,7 +219,7 @@ LoadInertialProfile estimateLoadProfileFromWrenches(const std::vector<WrenchObse
   const double mass = force_solution(0);
   if (mass <= 0.0)
   {
-    throw std::invalid_argument("estimated load mass must be positive");
+    throw std::invalid_argument("估计的负载质量必须为正数");
   }
 
   Eigen::MatrixXd torque_a(static_cast<Eigen::Index>(observations.size() * 3), 6);
