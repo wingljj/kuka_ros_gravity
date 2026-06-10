@@ -9,6 +9,7 @@
   <arg name="tool0_to_sri_yaw_pitch_roll" default="0 0 0"/>
   <arg name="noise_force" default="0.0"/>
   <arg name="noise_torque" default="0.0"/>
+  <arg name="offline_wrench_topic" default="/tool_gravity_compensation/offline_wrench"/>
 
   <include file="$(find kr340_moveit)/launch/demo.launch">
     <arg name="use_rviz" value="$(arg use_rviz)"/>
@@ -21,6 +22,7 @@
         type="offline_wrench_simulator.py" output="screen">
     <param name="mass_kg" value="$(arg payload_mass_kg)"/>
     <param name="com_sensor_m" value="$(arg payload_com_sensor_m)"/>
+    <param name="wrench_topic" value="$(arg offline_wrench_topic)"/>
     <param name="noise_force" value="$(arg noise_force)"/>
     <param name="noise_torque" value="$(arg noise_torque)"/>
   </node>
@@ -28,6 +30,7 @@
   <include file="$(find tool_gravity_compensation)/launch/kr240_payload_identification.launch">
     <arg name="tool0_to_sri_xyz" value="$(arg tool0_to_sri_xyz)"/>
     <arg name="tool0_to_sri_yaw_pitch_roll" value="$(arg tool0_to_sri_yaw_pitch_roll)"/>
+    <arg name="wrench_topic" value="$(arg offline_wrench_topic)"/>
     <arg name="min_stable_samples" value="10"/>
     <arg name="max_stddev_force" value="0.05"/>
     <arg name="max_stddev_torque" value="0.005"/>

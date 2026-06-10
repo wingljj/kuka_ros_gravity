@@ -22,6 +22,16 @@ def load_simulator_module():
 
 class OfflineWrenchSimulatorTest(unittest.TestCase):
 
+    def test_default_topic_is_namespaced_for_offline_simulation(self):
+        simulator = load_simulator_module()
+
+        self.assertEqual(
+            simulator.DEFAULT_OFFLINE_WRENCH_TOPIC,
+            "/tool_gravity_compensation/offline_wrench")
+        self.assertNotEqual(
+            simulator.DEFAULT_OFFLINE_WRENCH_TOPIC,
+            "/sri_ft_sensor/wrench")
+
     def test_computes_gravity_wrench_in_sensor_frame(self):
         simulator = load_simulator_module()
         force, torque = simulator.compute_wrench(

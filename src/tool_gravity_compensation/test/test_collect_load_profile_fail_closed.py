@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import math
 import unittest
 
 import actionlib
@@ -110,6 +111,27 @@ class CollectLoadProfileFailClosedTest(unittest.TestCase):
             max_stddev_torque=0.15,
             sample_timeout=0.5)
         self.assertTrue(valid.success, valid.message)
+
+    def test_sampling_config_rejects_non_finite_and_excessive_values(self):
+        cases = [
+            dict(filter_window_size=8, min_stable_samples=8,
+                 max_stddev_force=math.nan, max_stddev_torque=0.2, sample_timeout=1.0),
+            dict(filter_window_size=8, min_stable_samples=8,
+                 max_stddev_force=2.0, max_stddev_torque=math.inf, sample_timeout=1.0),
+            dict(filter_window_size=1000000, min_stable_samples=8,
+                 max_stddev_force=2.0, max_stddev_torque=0.2, sample_timeout=1.0),
+            dict(filter_window_size=8, min_stable_samples=1000000,
+                 max_stddev_force=2.0, max_stddev_torque=0.2, sample_timeout=1.0),
+            dict(filter_window_size=8, min_stable_samples=8,
+                 max_stddev_force=2.0, max_stddev_torque=0.2, sample_timeout=1000000.0),
+        ]
+        for kwargs in cases:
+            with self.subTest(kwargs=kwargs):
+                response = self.set_sampling_config(
+                    apply=True,
+                    clear_profiles=False,
+                    **kwargs)
+                self.assertFalse(response.success, response.message)
 
     def test_collect_action_aborts_in_checkpoint_mode(self):
         goal = CollectLoadProfileGoal()

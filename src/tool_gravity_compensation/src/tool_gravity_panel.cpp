@@ -37,6 +37,10 @@ namespace tool_gravity_compensation
 {
 namespace
 {
+constexpr int kOfflineMode = 0;
+constexpr int kRealSensorMode = 1;
+constexpr int kRealRobotMode = 2;
+
 QDoubleSpinBox* makeDoubleSpin(double min, double max, double value, int decimals = 4)
 {
   auto* spin = new QDoubleSpinBox;
@@ -53,6 +57,40 @@ QSpinBox* makeIntSpin(int min, int max, int value)
   spin->setRange(min, max);
   spin->setValue(value);
   return spin;
+}
+
+bool hasMasterTopic(const std::string& topic_name)
+{
+  ros::master::V_TopicInfo topics;
+  if (!ros::master::getTopics(topics))
+  {
+    return false;
+  }
+  for (const auto& topic : topics)
+  {
+    if (topic.name == topic_name)
+    {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool hasMasterNodeContaining(const std::string& needle)
+{
+  ros::V_string nodes;
+  if (!ros::master::getNodes(nodes))
+  {
+    return false;
+  }
+  for (const auto& node : nodes)
+  {
+    if (node.find(needle) != std::string::npos)
+    {
+      return true;
+    }
+  }
+  return false;
 }
 }  // namespace
 
@@ -123,6 +161,7 @@ public:
     connect(sensor_btn_, SIGNAL(clicked()), this, SLOT(onSensorConnect()));
     connect(robot_btn_, SIGNAL(clicked()), this, SLOT(onRobotConnect()));
     connect(clear_log_button_, SIGNAL(clicked()), this, SLOT(onClearLogClicked()));
+    connect(mode_combo_, SIGNAL(currentIndexChanged(int)), this, SLOT(onModeChanged(int)));
 
     connect(estop_check_, SIGNAL(stateChanged(int)), this, SLOT(updateSafetyGate()));
     connect(teach_pendant_check_, SIGNAL(stateChanged(int)), this, SLOT(updateSafetyGate()));
@@ -130,6 +169,7 @@ public:
     connect(low_speed_check_, SIGNAL(stateChanged(int)), this, SLOT(updateSafetyGate()));
     connect(tool_fixed_check_, SIGNAL(stateChanged(int)), this, SLOT(updateSafetyGate()));
 
+    onModeChanged(mode_combo_->currentIndex());
     updateSafetyGate();
     refresh_timer_ = new QTimer(this);
     connect(refresh_timer_, SIGNAL(timeout()), this, SLOT(onRefreshStatusClicked()));
@@ -157,10 +197,26 @@ private Q_SLOTS:
     sensor_btn_->setStyleSheet(s_alive ? "QPushButton{font-weight:bold;padding:3px 6px;background:#f44336;color:white;}" : "QPushButton{font-weight:bold;padding:3px 6px;}");
     robot_btn_->setText(r_alive ? "断开机器人" : "连接机器人");
     robot_btn_->setStyleSheet(r_alive ? "QPushButton{font-weight:bold;padding:3px 6px;background:#f44336;color:white;}" : "QPushButton{font-weight:bold;padding:3px 6px;}");
+    sensor_btn_->setEnabled(s_alive || modeAllowsSensorLaunch());
+    robot_btn_->setEnabled(r_alive || modeAllowsRobotLaunch());
+  }
+
+  void onModeChanged(int)
+  {
+    nh_.setParam("/tool_gravity_compensation/run_mode", mode_combo_->currentText().toStdString());
+    logOperation("运行模式: " + mode_combo_->currentText());
+    updateButtons();
+    updateSafetyGate();
   }
 
   void onSensorConnect()
   {
+    if (!modeAllowsSensorLaunch() && !(sensor_proc_ && sensor_proc_->state() == QProcess::Running))
+    {
+      status_label_->setText("当前模式不允许从面板启动真实传感器。");
+      logOperation("✗ 当前模式不允许启动真实传感器");
+      return;
+    }
     if (sensor_proc_ && sensor_proc_->state() == QProcess::Running)
     { disconnectSensor(); return; }
 
@@ -181,6 +237,12 @@ private Q_SLOTS:
 
   void onRobotConnect()
   {
+    if (!modeAllowsRobotLaunch() && !(robot_proc_ && robot_proc_->state() == QProcess::Running))
+    {
+      status_label_->setText("当前模式不允许从面板启动真实机器人接口。");
+      logOperation("✗ 当前模式不允许启动真实机器人接口");
+      return;
+    }
     if (robot_proc_ && robot_proc_->state() == QProcess::Running)
     { disconnectRobot(); return; }
 
@@ -237,19 +299,8 @@ private Q_SLOTS:
     const bool w_ok = (last_wrench_time_ > 0 && w_age < 2.0);
     const bool j_ok = (last_joint_time_ > 0 && j_age < 2.0);
 
-    // Sensor: raw_wrench topic == real SRI hardware
-    bool raw_ok = false;
-    ros::master::V_TopicInfo topics;
-    if (ros::master::getTopics(topics))
-      for (const auto& t : topics)
-        if (t.name == "/sri_ft_sensor/raw_wrench") { raw_ok = true; break; }
-
-    // Robot: kuka_eki node MUST exist (fake controller doesn't need it)
-    bool eki_ok = false;
-    ros::V_string nodes;
-    if (ros::master::getNodes(nodes))
-      for (const auto& n : nodes)
-        if (n.find("kuka_eki") != std::string::npos) { eki_ok = true; break; }
+    const bool raw_ok = hasMasterTopic("/sri_ft_sensor/raw_wrench");
+    const bool eki_ok = hasMasterNodeContaining("kuka_eki");
 
     if (w_ok && raw_ok)
       sensor_status_->setText(QString("● 硬件已连接  %1 Hz").arg(1.0/std::max(w_age,0.01),0,'f',0));
@@ -267,6 +318,7 @@ private Q_SLOTS:
 
     if (verbose)
       logOperation("状态: 传感器=" + sensor_status_->text() + "  机器人=" + robot_status_->text());
+    updateSafetyGate();
   }
 
   void handleWrench(const geometry_msgs::WrenchStampedConstPtr& msg)
@@ -400,14 +452,96 @@ private Q_SLOTS:
   {
     const bool safe = estop_check_->isChecked() && teach_pendant_check_->isChecked() &&
                       fence_check_->isChecked() && low_speed_check_->isChecked() && tool_fixed_check_->isChecked();
+    const bool mode_ready = isModeReadyForSampling();
     const bool was = tool_button_->isEnabled();
-    tool_button_->setEnabled(safe); total_button_->setEnabled(safe); compute_button_->setEnabled(safe);
-    safety_label_->setText(safe ? "安全检查已完成。" : "采样前请完成安全检查。");
-    if (safe != was)
-      logOperation(safe ? "✓ 安全检查全部通过，采样已启用" : "⚠ 安全检查未完成，采样已禁用");
+    tool_button_->setEnabled(safe && mode_ready);
+    total_button_->setEnabled(safe && mode_ready);
+    compute_button_->setEnabled(safe && mode_ready);
+    if (!safe)
+      safety_label_->setText("采样前请完成安全检查。");
+    else if (!mode_ready)
+      safety_label_->setText(modeGateMessage());
+    else
+      safety_label_->setText("安全检查已完成，当前模式允许采样。");
+    if ((safe && mode_ready) != was)
+      logOperation((safe && mode_ready) ? "✓ 安全检查和模式检查通过，采样已启用" : "⚠ 采样已禁用");
   }
 
 private:
+  bool modeAllowsSensorLaunch() const
+  {
+    return mode_combo_ && mode_combo_->currentIndex() >= kRealSensorMode;
+  }
+
+  bool modeAllowsRobotLaunch() const
+  {
+    return mode_combo_ && mode_combo_->currentIndex() == kRealRobotMode;
+  }
+
+  bool hasFreshWrench() const
+  {
+    return last_wrench_time_ > 0.0 && (ros::Time::now().toSec() - last_wrench_time_) < 2.0;
+  }
+
+  bool hasFreshJointState() const
+  {
+    return last_joint_time_ > 0.0 && (ros::Time::now().toSec() - last_joint_time_) < 2.0;
+  }
+
+  bool isModeReadyForSampling() const
+  {
+    if (!mode_combo_)
+    {
+      return false;
+    }
+    const int mode = mode_combo_->currentIndex();
+    if (mode == kOfflineMode)
+    {
+      return hasFreshWrench();
+    }
+    if (mode == kRealSensorMode)
+    {
+      return hasFreshWrench() && hasMasterTopic("/sri_ft_sensor/raw_wrench");
+    }
+    if (mode == kRealRobotMode)
+    {
+      return hasFreshWrench() && hasFreshJointState() &&
+             hasMasterTopic("/sri_ft_sensor/raw_wrench") &&
+             hasMasterNodeContaining("kuka_eki");
+    }
+    return false;
+  }
+
+  QString modeGateMessage() const
+  {
+    if (!mode_combo_)
+    {
+      return "运行模式未初始化。";
+    }
+    const int mode = mode_combo_->currentIndex();
+    if (mode == kOfflineMode)
+    {
+      return hasFreshWrench() ? "离线仿真数据已就绪。" : "离线模式需要先收到仿真力矩数据。";
+    }
+    if (mode == kRealSensorMode)
+    {
+      if (!hasMasterTopic("/sri_ft_sensor/raw_wrench"))
+        return "真实传感器模式需要 /sri_ft_sensor/raw_wrench 硬件数据源。";
+      return hasFreshWrench() ? "真实传感器数据已就绪。" : "真实传感器模式需要新鲜力矩数据。";
+    }
+    if (mode == kRealRobotMode)
+    {
+      if (!hasMasterTopic("/sri_ft_sensor/raw_wrench"))
+        return "真实机器人模式需要真实 SRI 传感器数据源。";
+      if (!hasMasterNodeContaining("kuka_eki"))
+        return "真实机器人模式需要 KUKA EKI 节点在线。";
+      if (!hasFreshJointState())
+        return "真实机器人模式需要新鲜 joint_states。";
+      return hasFreshWrench() ? "真实机器人模式已就绪。" : "真实机器人模式需要新鲜力矩数据。";
+    }
+    return "未知运行模式。";
+  }
+
   void logOperation(const QString& msg)
   {
     log_view_->appendPlainText("[" + QDateTime::currentDateTime().toString("hh:mm:ss") + "] " + msg);
@@ -433,6 +567,13 @@ private:
 
   void recordSample(uint8_t profile_type, const char* label)
   {
+    if (!isModeReadyForSampling())
+    {
+      const QString msg = modeGateMessage();
+      status_label_->setText(msg);
+      logOperation("✗ " + msg);
+      return;
+    }
     std::ostringstream pl; pl << std::fixed << std::setprecision(4)
       << "当前tool0位姿: x=" << last_tool_x_ << " y=" << last_tool_y_ << " z=" << last_tool_z_;
     logOperation(QString::fromStdString(pl.str()));
@@ -441,7 +582,10 @@ private:
     srv.request.manual_confirmed = true; srv.request.target_pose_name = label;
     if (!step_client_.waitForExistence(ros::Duration(0.2)) || !step_client_.call(srv))
     { status_label_->setText("step_control 服务不可用。"); logOperation("✗ step_control 服务不可用"); return; }
-    std::ostringstream st; st << label << ": " << srv.response.message << " (已采集=" << srv.response.samples_collected << ")";
+    std::ostringstream st; st << label << ": " << srv.response.message
+      << " (当前类型=" << srv.response.samples_collected
+      << ", TOOL_ONLY=" << srv.response.tool_samples_collected
+      << ", TOOL_PLUS_PAYLOAD=" << srv.response.total_samples_collected << ")";
     status_label_->setText(QString::fromStdString(st.str()));
     logOperation(srv.response.accepted ? "✓ " : "✗ " + QString::fromStdString(st.str()));
     if (srv.response.accepted && srv.response.samples_collected < 6)

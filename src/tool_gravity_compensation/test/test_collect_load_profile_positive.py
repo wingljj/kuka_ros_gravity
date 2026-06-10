@@ -108,8 +108,21 @@ class CollectLoadProfilePositiveTest(unittest.TestCase):
         response = self.step_control(request)
         self.assertTrue(response.accepted, response.message)
         self.assertTrue(response.sample_recorded, response.message)
+        return response
+
+    def clear_profiles(self):
+        response = self.set_sampling_config(
+            apply=True,
+            clear_profiles=True,
+            filter_window_size=10,
+            min_stable_samples=10,
+            max_stddev_force=0.001,
+            max_stddev_torque=0.001,
+            sample_timeout=1.0)
+        self.assertTrue(response.success, response.message)
 
     def test_computes_payload_after_tool_and_total_profiles_are_sampled(self):
+        self.clear_profiles()
         tool_mass = 1.5
         tool_com = [-0.02, 0.01, 0.12]
         payload_mass = 2.5
@@ -145,15 +158,7 @@ class CollectLoadProfilePositiveTest(unittest.TestCase):
         self.assertAlmostEqual(response.result.com_sensor.y, payload_com[1], places=6)
         self.assertAlmostEqual(response.result.com_sensor.z, payload_com[2], places=6)
 
-        cleared = self.set_sampling_config(
-            apply=True,
-            clear_profiles=True,
-            filter_window_size=10,
-            min_stable_samples=10,
-            max_stddev_force=0.001,
-            max_stddev_torque=0.001,
-            sample_timeout=1.0)
-        self.assertTrue(cleared.success, cleared.message)
+        self.clear_profiles()
 
         after_clear = self.compute_payload(request)
         self.assertFalse(after_clear.success)
@@ -175,6 +180,29 @@ class CollectLoadProfilePositiveTest(unittest.TestCase):
         result = self.collect_client.get_result()
         self.assertTrue(result.success, result.message)
         self.assertTrue(result.result.success, result.result.message)
+
+    def test_step_control_reports_counts_split_by_profile_type(self):
+        self.clear_profiles()
+
+        first_tool = self.record_sample(
+            StepControlRequest.TOOL_ONLY, 0, self.ROTATIONS[0], 1.5, [-0.02, 0.01, 0.12])
+        self.assertEqual(first_tool.samples_collected, 1)
+        self.assertEqual(first_tool.tool_samples_collected, 1)
+        self.assertEqual(first_tool.total_samples_collected, 0)
+
+        second_tool = self.record_sample(
+            StepControlRequest.TOOL_ONLY, 1, self.ROTATIONS[1], 1.5, [-0.02, 0.01, 0.12])
+        self.assertEqual(second_tool.samples_collected, 2)
+        self.assertEqual(second_tool.tool_samples_collected, 2)
+        self.assertEqual(second_tool.total_samples_collected, 0)
+
+        first_total = self.record_sample(
+            StepControlRequest.TOOL_PLUS_PAYLOAD, 2, self.ROTATIONS[2], 4.0, [0.055, -0.02125, 0.17])
+        self.assertEqual(first_total.samples_collected, 1)
+        self.assertEqual(first_total.tool_samples_collected, 2)
+        self.assertEqual(first_total.total_samples_collected, 1)
+
+        self.clear_profiles()
 
 
 if __name__ == "__main__":

@@ -7,6 +7,7 @@ from geometry_msgs.msg import WrenchStamped
 
 
 STANDARD_GRAVITY = 9.80665
+DEFAULT_OFFLINE_WRENCH_TOPIC = "/tool_gravity_compensation/offline_wrench"
 MAX_MASS_KG = 200.0
 MAX_COM_DISTANCE_M = 2.0
 MAX_FORCE_N = 10000.0
@@ -65,7 +66,7 @@ class OfflineWrenchSimulator:
     def __init__(self):
         self.base_frame = rospy.get_param("~base_frame", "base_link")
         self.sensor_frame = rospy.get_param("~sensor_frame", "sri_ft_sensor")
-        self.wrench_topic = rospy.get_param("~wrench_topic", "/sri_ft_sensor/wrench")
+        self.wrench_topic = rospy.get_param("~wrench_topic", DEFAULT_OFFLINE_WRENCH_TOPIC)
         self.publish_rate = float(rospy.get_param("~publish_rate", 100.0))
         self.mass_kg = float(rospy.get_param("~mass_kg", 4.0))
         self.com_sensor_m = get_vector_param("~com_sensor_m", [0.10, -0.04, 0.20])

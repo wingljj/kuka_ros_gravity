@@ -9,6 +9,26 @@ MAX_TRANSLATION_M = 5.0
 MAX_ROTATION_RAD = 2.0 * math.pi
 
 
+def validate_mount_config(parent_frame, child_frame, xyz, rpy):
+    if not parent_frame or not child_frame:
+        return False, "parent_frame 和 child_frame 为必填项"
+    if parent_frame == child_frame:
+        return False, "parent_frame 和 child_frame 不能相同"
+    if any(ch.isspace() for ch in parent_frame) or any(ch.isspace() for ch in child_frame):
+        return False, "frame 名称不能包含空白字符"
+    if len(xyz) != 3 or len(rpy) != 3:
+        return False, "xyz 和 rpy 必须各包含 3 个值"
+    for i, val in enumerate(xyz):
+        if not math.isfinite(val) or abs(val) > MAX_TRANSLATION_M:
+            return False, "xyz[{}]={} exceeds allowed range +/-{} m".format(
+                i, val, MAX_TRANSLATION_M)
+    for i, val in enumerate(rpy):
+        if not math.isfinite(val) or abs(val) > MAX_ROTATION_RAD:
+            return False, "rpy[{}]={} exceeds allowed range +/-{} rad".format(
+                i, val, MAX_ROTATION_RAD)
+    return True, ""
+
+
 def make_transform(parent_frame, child_frame, xyz, rpy, stamp=None):
     transform = TransformStamped()
     transform.header.stamp = stamp if stamp is not None else rospy.Time(0)
@@ -43,14 +63,10 @@ class SensorMountTfManager:
         self.rpy = vector_param("~rpy", [0.0, 0.0, 0.0])
         self.publish_rate = float(rospy.get_param("~publish_rate", 50.0))
 
-        # Validate bounds
-        for i, val in enumerate(self.xyz):
-            if not math.isfinite(val) or abs(val) > MAX_TRANSLATION_M:
-                raise ValueError("xyz[{}]={} exceeds allowed range +/-{} m".format(i, val, MAX_TRANSLATION_M))
-        for i, val in enumerate(self.rpy):
-            if not math.isfinite(val) or abs(val) > MAX_ROTATION_RAD:
-                raise ValueError("rpy[{}]={} exceeds allowed range +/-{} rad".format(i, val, MAX_ROTATION_RAD))
-        if self.publish_rate <= 0.0 or self.publish_rate > 200.0:
+        valid, message = validate_mount_config(self.parent_frame, self.child_frame, self.xyz, self.rpy)
+        if not valid:
+            raise ValueError(message)
+        if not math.isfinite(self.publish_rate) or self.publish_rate <= 0.0 or self.publish_rate > 200.0:
             raise ValueError("publish_rate must be positive and <= 200 Hz")
 
         self.broadcaster = tf.TransformBroadcaster()
@@ -61,16 +77,20 @@ class SensorMountTfManager:
         response = SetSensorMountResponse()
         parent = request.parent_frame or self.parent_frame
         child = request.child_frame or self.child_frame
-        if not parent or not child:
+
+        xyz = [float(request.x), float(request.y), float(request.z)]
+        rpy = [float(request.roll), float(request.pitch), float(request.yaw)]
+        valid, message = validate_mount_config(parent, child, xyz, rpy)
+        if not valid:
             response.success = False
-            response.message = "parent_frame 和 child_frame 为必填项"
+            response.message = message
             response.transform = self.transform
             return response
 
         self.parent_frame = parent
         self.child_frame = child
-        self.xyz = [request.x, request.y, request.z]
-        self.rpy = [request.roll, request.pitch, request.yaw]
+        self.xyz = xyz
+        self.rpy = rpy
         self.transform = make_transform(self.parent_frame, self.child_frame, self.xyz, self.rpy)
         if request.save_to_params:
             rospy.set_param("~parent_frame", self.parent_frame)

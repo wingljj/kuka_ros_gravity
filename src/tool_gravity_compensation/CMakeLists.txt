@@ -196,6 +196,7 @@ if(CATKIN_ENABLE_TESTING)
 
   catkin_add_nosetests(test/test_offline_wrench_simulator.py)
   catkin_add_nosetests(test/test_sensor_mount_tf_manager.py)
+  catkin_add_nosetests(test/test_tool_gravity_panel_mode_gating.py)
   catkin_add_nosetests(test/test_payload_comparison_report.py)
   catkin_add_nosetests(test/test_payload_dataset_validation_runner.py)
 

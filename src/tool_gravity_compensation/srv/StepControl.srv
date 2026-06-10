@@ -11,5 +11,8 @@ geometry_msgs/PoseStamped target_pose
 bool accepted
 bool motion_done
 bool sample_recorded
+# Count for the requested profile_type; split counters avoid TOOL_ONLY/TOTAL ambiguity.
 uint32 samples_collected
+uint32 tool_samples_collected
+uint32 total_samples_collected
 string message

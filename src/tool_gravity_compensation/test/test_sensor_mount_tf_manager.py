@@ -2,6 +2,7 @@
 import importlib.util
 import math
 import os
+from types import SimpleNamespace
 import unittest
 
 
@@ -39,6 +40,67 @@ class SensorMountTfManagerTest(unittest.TestCase):
         self.assertAlmostEqual(transform.transform.translation.z, 0.3)
         self.assertAlmostEqual(transform.transform.rotation.z, math.sqrt(0.5), places=6)
         self.assertAlmostEqual(transform.transform.rotation.w, math.sqrt(0.5), places=6)
+
+    def test_service_rejects_non_finite_and_out_of_range_mount_updates(self):
+        manager_module = load_manager_module()
+        manager = object.__new__(manager_module.SensorMountTfManager)
+        manager.parent_frame = "tool0"
+        manager.child_frame = "sri_ft_sensor"
+        manager.xyz = [0.0, 0.0, 0.0]
+        manager.rpy = [0.0, 0.0, 0.0]
+        manager.transform = manager_module.make_transform(
+            manager.parent_frame, manager.child_frame, manager.xyz, manager.rpy)
+
+        cases = [
+            SimpleNamespace(parent_frame="tool0", child_frame="sri_ft_sensor",
+                            x=math.nan, y=0.0, z=0.0,
+                            roll=0.0, pitch=0.0, yaw=0.0, save_to_params=False),
+            SimpleNamespace(parent_frame="tool0", child_frame="sri_ft_sensor",
+                            x=manager_module.MAX_TRANSLATION_M + 0.01, y=0.0, z=0.0,
+                            roll=0.0, pitch=0.0, yaw=0.0, save_to_params=False),
+            SimpleNamespace(parent_frame="tool0", child_frame="tool0",
+                            x=0.0, y=0.0, z=0.0,
+                            roll=0.0, pitch=0.0, yaw=0.0, save_to_params=False),
+            SimpleNamespace(parent_frame="tool0", child_frame="sri_ft_sensor",
+                            x=0.0, y=0.0, z=0.0,
+                            roll=0.0, pitch=manager_module.MAX_ROTATION_RAD + 0.01,
+                            yaw=0.0, save_to_params=False),
+        ]
+
+        for request in cases:
+            with self.subTest(request=request):
+                response = manager.handle_set_sensor_mount(request)
+                self.assertFalse(response.success, response.message)
+                self.assertEqual(manager.parent_frame, "tool0")
+                self.assertEqual(manager.child_frame, "sri_ft_sensor")
+                self.assertEqual(manager.xyz, [0.0, 0.0, 0.0])
+                self.assertEqual(manager.rpy, [0.0, 0.0, 0.0])
+
+    def test_service_accepts_valid_mount_update_after_validation(self):
+        manager_module = load_manager_module()
+        manager = object.__new__(manager_module.SensorMountTfManager)
+        manager.parent_frame = "tool0"
+        manager.child_frame = "sri_ft_sensor"
+        manager.xyz = [0.0, 0.0, 0.0]
+        manager.rpy = [0.0, 0.0, 0.0]
+        manager.transform = manager_module.make_transform(
+            manager.parent_frame, manager.child_frame, manager.xyz, manager.rpy)
+
+        response = manager.handle_set_sensor_mount(SimpleNamespace(
+            parent_frame="tool0",
+            child_frame="sri_ft_sensor",
+            x=0.1,
+            y=-0.2,
+            z=0.3,
+            roll=0.0,
+            pitch=0.0,
+            yaw=math.pi / 2.0,
+            save_to_params=False,
+        ))
+
+        self.assertTrue(response.success, response.message)
+        self.assertEqual(manager.xyz, [0.1, -0.2, 0.3])
+        self.assertEqual(manager.rpy, [0.0, 0.0, math.pi / 2.0])
 
 
 if __name__ == "__main__":

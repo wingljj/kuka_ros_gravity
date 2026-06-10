@@ -13,6 +13,7 @@
 #include <cmath>
 #include <deque>
 #include <exception>
+#include <limits>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -72,6 +73,22 @@ bool validProfileType(uint8_t profile_type)
          profile_type == StepControl::Request::TOOL_PLUS_PAYLOAD;
 }
 
+constexpr int kDefaultFilterWindowSize = 10;
+constexpr int kDefaultMinStableSamples = 20;
+constexpr double kDefaultMaxStddevForce = 2.0;
+constexpr double kDefaultMaxStddevTorque = 0.2;
+constexpr double kDefaultSampleTimeout = 1.0;
+constexpr int kMaxFilterWindowSize = 1000;
+constexpr int kMaxMinStableSamples = 1000;
+constexpr double kMaxStddevForce = 1000.0;
+constexpr double kMaxStddevTorque = 1000.0;
+constexpr double kMaxSampleTimeout = 60.0;
+
+bool finiteInRange(double value, double min_value, double max_value)
+{
+  return std::isfinite(value) && value >= min_value && value <= max_value;
+}
+
 }  // namespace
 
 class CollectLoadProfileServer
@@ -87,13 +104,12 @@ public:
     private_nh_.param<std::string>("sensor_frame", sensor_frame_, "sri_ft_sensor");
     private_nh_.param<std::string>("base_frame", base_frame_, "base_link");
     private_nh_.param<std::string>("move_group", move_group_, "manipulator");
-    private_nh_.param<int>("sampling/filter_window_size", filter_window_size_, 10);
-    private_nh_.param<double>("sampling/max_stddev_force", max_stddev_force_, 2.0);
-    private_nh_.param<double>("sampling/max_stddev_torque", max_stddev_torque_, 0.2);
-    private_nh_.param<int>("sampling/min_stable_samples", min_stable_samples_, 20);
-    private_nh_.param<double>("sampling/sample_timeout", sample_timeout_s_, 1.0);
-    filter_window_size_ = std::max(1, filter_window_size_);
-    min_stable_samples_ = std::max(1, min_stable_samples_);
+    private_nh_.param<int>("sampling/filter_window_size", filter_window_size_, kDefaultFilterWindowSize);
+    private_nh_.param<double>("sampling/max_stddev_force", max_stddev_force_, kDefaultMaxStddevForce);
+    private_nh_.param<double>("sampling/max_stddev_torque", max_stddev_torque_, kDefaultMaxStddevTorque);
+    private_nh_.param<int>("sampling/min_stable_samples", min_stable_samples_, kDefaultMinStableSamples);
+    private_nh_.param<double>("sampling/sample_timeout", sample_timeout_s_, kDefaultSampleTimeout);
+    sanitizeStartupSamplingConfig();
     window_capacity_ = std::max(filter_window_size_, min_stable_samples_);
 
     wrench_sub_ = nh_.subscribe(wrench_topic_, 100, &CollectLoadProfileServer::handleWrench, this);
@@ -117,6 +133,105 @@ public:
 
 private:
   typedef actionlib::SimpleActionServer<CollectLoadProfileAction> Server;
+
+  void sanitizeStartupSamplingConfig()
+  {
+    if (filter_window_size_ < 1 || filter_window_size_ > kMaxFilterWindowSize)
+    {
+      ROS_WARN_STREAM("sampling/filter_window_size 超出安全范围，使用默认值 "
+                      << kDefaultFilterWindowSize << "，原始值=" << filter_window_size_);
+      filter_window_size_ = kDefaultFilterWindowSize;
+    }
+    if (min_stable_samples_ < 1 || min_stable_samples_ > kMaxMinStableSamples)
+    {
+      ROS_WARN_STREAM("sampling/min_stable_samples 超出安全范围，使用默认值 "
+                      << kDefaultMinStableSamples << "，原始值=" << min_stable_samples_);
+      min_stable_samples_ = kDefaultMinStableSamples;
+    }
+    if (!finiteInRange(max_stddev_force_, std::numeric_limits<double>::min(), kMaxStddevForce))
+    {
+      ROS_WARN_STREAM("sampling/max_stddev_force 非法，使用默认值 "
+                      << kDefaultMaxStddevForce << "，原始值=" << max_stddev_force_);
+      max_stddev_force_ = kDefaultMaxStddevForce;
+    }
+    if (!finiteInRange(max_stddev_torque_, std::numeric_limits<double>::min(), kMaxStddevTorque))
+    {
+      ROS_WARN_STREAM("sampling/max_stddev_torque 非法，使用默认值 "
+                      << kDefaultMaxStddevTorque << "，原始值=" << max_stddev_torque_);
+      max_stddev_torque_ = kDefaultMaxStddevTorque;
+    }
+    if (!finiteInRange(sample_timeout_s_, std::numeric_limits<double>::min(), kMaxSampleTimeout))
+    {
+      ROS_WARN_STREAM("sampling/sample_timeout 非法，使用默认值 "
+                      << kDefaultSampleTimeout << "，原始值=" << sample_timeout_s_);
+      sample_timeout_s_ = kDefaultSampleTimeout;
+    }
+  }
+
+  bool validateSamplingConfig(const SetSamplingConfig::Request& request, std::string& error) const
+  {
+    if (request.filter_window_size < 1 || request.min_stable_samples < 1)
+    {
+      error = "filter_window_size 和 min_stable_samples 必须为正数";
+      return false;
+    }
+    if (request.filter_window_size > kMaxFilterWindowSize)
+    {
+      std::ostringstream stream;
+      stream << "filter_window_size 超过上限 " << kMaxFilterWindowSize;
+      error = stream.str();
+      return false;
+    }
+    if (request.min_stable_samples > kMaxMinStableSamples)
+    {
+      std::ostringstream stream;
+      stream << "min_stable_samples 超过上限 " << kMaxMinStableSamples;
+      error = stream.str();
+      return false;
+    }
+    if (!finiteInRange(request.max_stddev_force, std::numeric_limits<double>::min(), kMaxStddevForce))
+    {
+      std::ostringstream stream;
+      stream << "max_stddev_force 必须为有限正数且不超过 " << kMaxStddevForce;
+      error = stream.str();
+      return false;
+    }
+    if (!finiteInRange(request.max_stddev_torque, std::numeric_limits<double>::min(), kMaxStddevTorque))
+    {
+      std::ostringstream stream;
+      stream << "max_stddev_torque 必须为有限正数且不超过 " << kMaxStddevTorque;
+      error = stream.str();
+      return false;
+    }
+    if (!finiteInRange(request.sample_timeout, std::numeric_limits<double>::min(), kMaxSampleTimeout))
+    {
+      std::ostringstream stream;
+      stream << "sample_timeout 必须为有限正数且不超过 " << kMaxSampleTimeout << " 秒";
+      error = stream.str();
+      return false;
+    }
+    return true;
+  }
+
+  uint32_t samplesForProfile(uint8_t profile_type) const
+  {
+    if (profile_type == StepControl::Request::TOOL_ONLY)
+    {
+      return static_cast<uint32_t>(tool_observations_.size());
+    }
+    if (profile_type == StepControl::Request::TOOL_PLUS_PAYLOAD)
+    {
+      return static_cast<uint32_t>(total_observations_.size());
+    }
+    return 0;
+  }
+
+  void fillSampleCounts(uint8_t profile_type, StepControl::Response& response) const
+  {
+    response.samples_collected = samplesForProfile(profile_type);
+    response.tool_samples_collected = static_cast<uint32_t>(tool_observations_.size());
+    response.total_samples_collected = static_cast<uint32_t>(total_observations_.size());
+  }
 
   void execute(const CollectLoadProfileGoalConstPtr& goal)
   {
@@ -222,7 +337,7 @@ private:
     response.accepted = false;
     response.motion_done = false;
     response.sample_recorded = false;
-    response.samples_collected = samples_collected_;
+    fillSampleCounts(request.profile_type, response);
 
     if (request.execute_motion)
     {
@@ -262,11 +377,14 @@ private:
       total_observations_.push_back(observation);
     }
 
-    ++samples_collected_;
     response.accepted = true;
     response.sample_recorded = true;
-    response.samples_collected = samples_collected_;
-    response.message = "已记录稳定的力矩样本";
+    fillSampleCounts(request.profile_type, response);
+    std::ostringstream stream;
+    stream << "已记录稳定的力矩样本: TOOL_ONLY="
+           << response.tool_samples_collected
+           << " TOOL_PLUS_PAYLOAD=" << response.total_samples_collected;
+    response.message = stream.str();
     return true;
   }
 
@@ -329,14 +447,10 @@ private:
       response.message = "SetSamplingConfig 被拒绝：apply 标志为 false";
       return true;
     }
-    if (request.filter_window_size < 1 || request.min_stable_samples < 1)
+    std::string error;
+    if (!validateSamplingConfig(request, error))
     {
-      response.message = "filter_window_size 和 min_stable_samples 必须为正数";
-      return true;
-    }
-    if (request.max_stddev_force <= 0.0 || request.max_stddev_torque <= 0.0 || request.sample_timeout <= 0.0)
-    {
-      response.message = "稳定性阈值和 sample_timeout 必须为正数";
+      response.message = error;
       return true;
     }
 
@@ -354,7 +468,6 @@ private:
     {
       tool_observations_.clear();
       total_observations_.clear();
-      samples_collected_ = 0;
     }
 
     private_nh_.setParam("sampling/filter_window_size", filter_window_size_);
@@ -453,7 +566,6 @@ private:
   std::deque<geometry_msgs::WrenchStamped> wrench_window_;
   std::vector<WrenchObservation> tool_observations_;
   std::vector<WrenchObservation> total_observations_;
-  uint32_t samples_collected_{0};
   std::string wrench_topic_;
   std::string sensor_frame_;
   std::string base_frame_;
