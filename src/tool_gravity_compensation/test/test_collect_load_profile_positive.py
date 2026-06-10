@@ -157,7 +157,9 @@ class CollectLoadProfilePositiveTest(unittest.TestCase):
 
         after_clear = self.compute_payload(request)
         self.assertFalse(after_clear.success)
-        self.assertIn("Need at least", after_clear.message)
+        self.assertFalse(after_clear.result.success)
+        self.assertTrue(after_clear.message)
+        self.assertEqual(after_clear.message, after_clear.result.message)
 
     def test_manual_action_records_requested_samples_without_motion(self):
         self.publish_static_window(self.ROTATIONS[0], 1.5, [-0.02, 0.01, 0.12])

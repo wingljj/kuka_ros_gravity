@@ -23,6 +23,77 @@ Use the RViz panel named `Payload Identification`.
 5. Click `Record TOOL_PLUS_PAYLOAD` for the tooling plus payload profile.
 6. Click `Compute Payload`.
 
+## Dataset Replay Regression
+
+The repository-level `src/datasets/payload_test_dataset.json` file can be
+replayed through the ROS sampling and compute services:
+
+```bash
+source /opt/ros/noetic/setup.bash
+source devel/setup.bash
+catkin_make payload_dataset_validation_report
+```
+
+The replay covers nominal, biased, rotated sensor, farther COM, and 150 kg
+payload cases. The heavy payload case verifies that least-squares solving still
+uses the original physical matrix while the condition-number gate uses a
+column-normalized matrix.
+
+`payload_dataset_validation_report` runs the ROS replay and then prints the
+detailed Markdown table in the current terminal. Each row compares:
+
+- `Theory`: value from `src/datasets/payload_test_dataset.json`.
+- `Actual`: value returned by the ROS `/compute_payload` service.
+- `Abs Error`: `abs(Actual - Theory)`.
+- `Tolerance`: the regression threshold for the synthetic dataset.
+- `Result`: `PASS` when `Abs Error <= Tolerance`.
+
+The report contains five dataset cases and seven metrics per case:
+`tool_mass_kg`, `payload_mass_kg`, `payload_weight_n`,
+`payload_com_x_m`, `payload_com_y_m`, `payload_com_z_m`, and
+`residual_error`. The residual theory value is `0` for this noise-free
+synthetic dataset; it is a numerical regression gate, not a recommended
+field-test sensor-noise threshold.
+
+The run also writes:
+
+```text
+build/test_results/tool_gravity_compensation/payload_dataset_comparison.md
+build/test_results/tool_gravity_compensation/payload_dataset_comparison.csv
+```
+
+Pass criteria:
+
+```bash
+catkin_test_results build/test_results/tool_gravity_compensation
+```
+
+should report `0 errors, 0 failures`, and the Markdown report should show
+`Failed: 0` with every metric row marked `PASS`.
+
+If you run the lower-level rostest target directly, ROS captures most test
+logging, so the terminal output is shorter. Use this fallback to inspect the
+same detailed theory-vs-actual report:
+
+```bash
+catkin_make run_tests_tool_gravity_compensation_rostest_test_payload_dataset_replay.test
+catkin_test_results build/test_results/tool_gravity_compensation
+sed -n '1,120p' build/test_results/tool_gravity_compensation/payload_dataset_comparison.md
+```
+
+For the whole package regression suite:
+
+```bash
+catkin_make run_tests_tool_gravity_compensation
+catkin_test_results build/test_results/tool_gravity_compensation
+```
+
+Condition-number normalization is validated by the 150 kg replay case and the
+C++ heavy-payload regression. The public payload result message does not expose
+raw or normalized condition-number values, so the report validates the behavior
+through accepted identification and numerical agreement rather than printing
+condition-number diagnostics directly.
+
 ## Real KR240 + SRI Launch
 
 ```bash
@@ -80,6 +151,9 @@ The SRI driver uses TCP port `4008` and publishes:
   orientations are recommended.
 - Near-singular orientation sets are rejected by least-squares rank/condition
   checks.
+- Condition-number gating is evaluated on a column-normalized least-squares
+  matrix so heavy payloads are not rejected only because torque and bias
+  columns have different physical scales.
 - Force and torque residuals are checked during `/compute_payload` before a
   payload result is reported as successful.
 - Tare-subtracted payload mass must be at least `0.05 kg` by default.

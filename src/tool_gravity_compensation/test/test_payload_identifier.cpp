@@ -36,6 +36,41 @@ std::array<double, 3> cross(const std::array<double, 3>& a, const std::array<dou
     a[0] * b[1] - a[1] * b[0]
   }};
 }
+
+const std::array<std::array<double, 9>, 6> kExcitingBaseRSensorValues{{
+  {{1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0}},
+  {{0.0, -1.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0}},
+  {{0.0, 0.0, 1.0, 0.0, 1.0, 0.0, -1.0, 0.0, 0.0}},
+  {{1.0, 0.0, 0.0, 0.0, 0.0, -1.0, 0.0, 1.0, 0.0}},
+  {{0.0, 0.0, -1.0, 1.0, 0.0, 0.0, 0.0, -1.0, 0.0}},
+  {{0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 0.0}}
+}};
+
+std::vector<WrenchObservation> makeStaticWrenchObservations(double mass,
+                                                            const std::array<double, 3>& com,
+                                                            const std::array<double, 3>& force_bias,
+                                                            const std::array<double, 3>& torque_bias)
+{
+  const std::array<double, 3> gravity_force_base{{0.0, 0.0, -mass * tool_gravity_compensation::kStandardGravity}};
+
+  std::vector<WrenchObservation> observations;
+  for (const std::array<double, 9>& base_R_sensor : kExcitingBaseRSensorValues)
+  {
+    const std::array<double, 3> load_force_sensor = transposeMatVec(base_R_sensor, gravity_force_base);
+    const std::array<double, 3> load_torque_sensor = cross(com, load_force_sensor);
+
+    WrenchObservation observation;
+    observation.base_R_sensor = base_R_sensor;
+    for (std::size_t i = 0; i < 3; ++i)
+    {
+      observation.force[i] = load_force_sensor[i] + force_bias[i];
+      observation.torque[i] = load_torque_sensor[i] + torque_bias[i];
+    }
+    observations.push_back(observation);
+  }
+
+  return observations;
+}
 }  // namespace
 
 TEST(PayloadIdentifier, ComputesPayloadMassWeightAndCenterOfMassByTareSubtraction)
@@ -93,32 +128,25 @@ TEST(PayloadIdentifier, EstimatesLoadProfileFromMultipleStaticWrenchOrientations
   const std::array<double, 3> com{{0.08, -0.03, 0.14}};
   const std::array<double, 3> force_bias{{1.1, -0.7, 0.4}};
   const std::array<double, 3> torque_bias{{0.05, -0.02, 0.03}};
-  const std::array<double, 3> gravity_force_base{{0.0, 0.0, -mass * tool_gravity_compensation::kStandardGravity}};
+  const std::vector<WrenchObservation> observations =
+      makeStaticWrenchObservations(mass, com, force_bias, torque_bias);
 
-  const std::array<std::array<double, 9>, 6> base_R_sensor_values{{
-    {{1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0}},
-    {{0.0, -1.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0}},
-    {{0.0, 0.0, 1.0, 0.0, 1.0, 0.0, -1.0, 0.0, 0.0}},
-    {{1.0, 0.0, 0.0, 0.0, 0.0, -1.0, 0.0, 1.0, 0.0}},
-    {{0.0, 0.0, -1.0, 1.0, 0.0, 0.0, 0.0, -1.0, 0.0}},
-    {{0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 0.0}}
-  }};
+  const LoadInertialProfile profile = estimateLoadProfileFromWrenches(observations);
 
-  std::vector<WrenchObservation> observations;
-  for (const std::array<double, 9>& base_R_sensor : base_R_sensor_values)
-  {
-    const std::array<double, 3> load_force_sensor = transposeMatVec(base_R_sensor, gravity_force_base);
-    const std::array<double, 3> load_torque_sensor = cross(com, load_force_sensor);
+  EXPECT_NEAR(profile.mass_kg, mass, 1e-9);
+  EXPECT_NEAR(profile.com_sensor_m[0], com[0], 1e-9);
+  EXPECT_NEAR(profile.com_sensor_m[1], com[1], 1e-9);
+  EXPECT_NEAR(profile.com_sensor_m[2], com[2], 1e-9);
+  EXPECT_NEAR(profile.residual_error, 0.0, 1e-9);
+}
 
-    WrenchObservation observation;
-    observation.base_R_sensor = base_R_sensor;
-    for (std::size_t i = 0; i < 3; ++i)
-    {
-      observation.force[i] = load_force_sensor[i] + force_bias[i];
-      observation.torque[i] = load_torque_sensor[i] + torque_bias[i];
-    }
-    observations.push_back(observation);
-  }
+TEST(PayloadIdentifier, AcceptsHeavyPayloadWhenOnlyRawTorqueConditionNumberIsLarge)
+{
+  const double mass = 150.0;
+  const std::array<double, 3> com{{0.12, -0.05, 0.24}};
+  const std::array<double, 3> zero_bias{{0.0, 0.0, 0.0}};
+  const std::vector<WrenchObservation> observations =
+      makeStaticWrenchObservations(mass, com, zero_bias, zero_bias);
 
   const LoadInertialProfile profile = estimateLoadProfileFromWrenches(observations);
 

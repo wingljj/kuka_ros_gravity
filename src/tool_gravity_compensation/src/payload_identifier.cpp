@@ -96,6 +96,22 @@ double conditionNumber(const Eigen::MatrixXd& matrix)
   return largest / smallest;
 }
 
+double columnNormalizedConditionNumber(const Eigen::MatrixXd& matrix)
+{
+  Eigen::MatrixXd normalized = matrix;
+  const double kColumnNormTolerance = 1e-12;
+  for (Eigen::Index col = 0; col < normalized.cols(); ++col)
+  {
+    const double norm = normalized.col(col).norm();
+    if (!std::isfinite(norm) || norm <= kColumnNormTolerance)
+    {
+      return std::numeric_limits<double>::infinity();
+    }
+    normalized.col(col) /= norm;
+  }
+  return conditionNumber(normalized);
+}
+
 void validateLeastSquaresQuality(const char* label,
                                  const Eigen::MatrixXd& a,
                                  const Eigen::VectorXd& b,
@@ -118,12 +134,14 @@ void validateLeastSquaresQuality(const char* label,
     throw std::invalid_argument(std::string(label) + " 观测数据病态");
   }
 
-  const double condition = conditionNumber(a);
-  if (condition > maximum_condition_number)
+  const double raw_condition = conditionNumber(a);
+  const double normalized_condition = columnNormalizedConditionNumber(a);
+  if (normalized_condition > maximum_condition_number)
   {
     std::ostringstream stream;
-    stream << label << " 观测数据病态: condition_number="
-           << condition << " > " << maximum_condition_number;
+    stream << label << " 观测数据病态: normalized_condition_number="
+           << normalized_condition << " > " << maximum_condition_number
+           << " raw_condition_number=" << raw_condition;
     throw std::invalid_argument(stream.str());
   }
 

@@ -190,11 +190,14 @@ if(CATKIN_ENABLE_TESTING)
     test/test_sensor_mount_tf_manager.py
     test/test_collect_load_profile_fail_closed.py
     test/test_collect_load_profile_positive.py
+    test/test_payload_dataset_replay.py
     DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
   )
 
   catkin_add_nosetests(test/test_offline_wrench_simulator.py)
   catkin_add_nosetests(test/test_sensor_mount_tf_manager.py)
+  catkin_add_nosetests(test/test_payload_comparison_report.py)
+  catkin_add_nosetests(test/test_payload_dataset_validation_runner.py)
 
   catkin_add_gtest(test_payload_identifier test/test_payload_identifier.cpp)
   if(TARGET test_payload_identifier)
@@ -205,6 +208,18 @@ if(CATKIN_ENABLE_TESTING)
   )
   add_rostest(test/collect_load_profile_positive.test
     DEPENDENCIES collect_load_profile_server
+  )
+  add_rostest(test/payload_dataset_replay.test
+    DEPENDENCIES collect_load_profile_server
+  )
+  add_custom_target(payload_dataset_validation_report
+    COMMAND ${CATKIN_ENV} ${PYTHON_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/scripts/run_payload_dataset_validation.py
+            --report-dir ${CATKIN_TEST_RESULTS_DIR}/${PROJECT_NAME}
+    DEPENDS collect_load_profile_server
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+    USES_TERMINAL
+    COMMENT "Run payload dataset replay and print theory-vs-actual comparison report"
   )
 endif()
 
@@ -219,6 +234,7 @@ endif()
 ## in contrast to setup.py, you can choose the destination
 catkin_install_python(PROGRAMS
   scripts/offline_wrench_simulator.py
+  scripts/run_payload_dataset_validation.py
   scripts/sensor_mount_tf_manager.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )

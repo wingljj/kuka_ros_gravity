@@ -1,0 +1,22 @@
+<launch>
+  <node name="collect_load_profile_server" pkg="tool_gravity_compensation"
+        type="collect_load_profile_server" output="screen">
+    <param name="wrench_topic" value="/sri_ft_sensor/wrench"/>
+    <param name="sensor_frame" value="sri_ft_sensor"/>
+    <param name="base_frame" value="base_link"/>
+    <param name="move_group" value="manipulator"/>
+    <param name="sampling/filter_window_size" value="3"/>
+    <param name="sampling/max_stddev_force" value="0.000001"/>
+    <param name="sampling/max_stddev_torque" value="0.000001"/>
+    <param name="sampling/min_stable_samples" value="3"/>
+    <param name="sampling/sample_timeout" value="1.0"/>
+  </node>
+
+  <test test-name="test_payload_dataset_replay"
+        pkg="tool_gravity_compensation"
+        type="test_payload_dataset_replay.py"
+        time-limit="30.0">
+    <param name="dataset_path" value="$(find tool_gravity_compensation)/../datasets/payload_test_dataset.json"/>
+    <param name="report_dir" value="$(find tool_gravity_compensation)/../../build/test_results/tool_gravity_compensation"/>
+  </test>
+</launch>
